@@ -1,6 +1,6 @@
 const CACHE_NAME = 'estimator-v1';
 const ASSETS = [
-  './estimate-generator.html',
+  './index.html',
   './manifest.json'
 ];
 

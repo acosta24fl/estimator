@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html><body>
+<p>Right-click each image and "Save image as" with the filename shown:</p>
+<h3>Save as: icon-192.png</h3>
+<canvas id="c192" width="192" height="192"></canvas>
+<h3>Save as: icon-512.png</h3>
+<canvas id="c512" width="512" height="512"></canvas>
+<script>
+function drawIcon(canvas) {
+  const s = canvas.width;
+  const ctx = canvas.getContext('2d');
+  // Background
+  ctx.fillStyle = '#1a1d27';
+  ctx.beginPath();
+  ctx.roundRect(0, 0, s, s, s * 0.18);
+  ctx.fill();
+  // Dollar sign
+  ctx.fillStyle = '#4aff8c';
+  ctx.font = `bold ${s * 0.55}px "Segoe UI", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('$', s / 2, s / 2);
+  // Small calculator lines
+  ctx.strokeStyle = '#7eb8ff';
+  ctx.lineWidth = s * 0.02;
+  const lx = s * 0.2, rx = s * 0.38;
+  for (let i = 0; i < 3; i++) {
+    const y = s * 0.72 + i * s * 0.07;
+    ctx.beginPath(); ctx.moveTo(lx, y); ctx.lineTo(rx, y); ctx.stroke();
+  }
+}
+drawIcon(document.getElementById('c192'));
+drawIcon(document.getElementById('c512'));
+
+// Auto-download
+['c192','c512'].forEach(id => {
+  const c = document.getElementById(id);
+  const link = document.createElement('a');
+  link.download = id === 'c192' ? 'icon-192.png' : 'icon-512.png';
+  link.href = c.toDataURL('image/png');
+  link.click();
+});
+</script>
+</body></html>
