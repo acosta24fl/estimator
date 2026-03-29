@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+  <title>Job Estimate Generator</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #0f1117;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      margin-bottom: 30px;
+      font-size: 0.95rem;
+    }
+
+    /* Sections */
+    .section {
+      background: #1a1d27;
+      border: 1px solid #2a2d3a;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .section h2 {
+      font-size: 1.15rem;
+      margin-bottom: 16px;
+      color: #7eb8ff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .section h2 .icon { font-size: 1.3rem; }
+
+    /* Form grid */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 600px) {
+      .form-grid { grid-template-columns: 1fr; }
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+    }
+    .form-group.full-width {
+      grid-column: 1 / -1;
+    }
+    label {
+      font-size: 0.85rem;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+    input, select, textarea {
+      background: #12141c;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #e0e0e0;
+      font-size: 0.95rem;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #7eb8ff;
+    }
+    textarea { resize: vertical; min-height: 60px; }
+
+    /* Materials list */
+    .materials-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .material-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .material-row input:first-child { flex: 2; }
+    .material-row input:nth-child(2) { flex: 1; }
+    .material-row input:nth-child(3) { flex: 0.6; }
+    .material-row button {
+      background: #ff4d4d;
+      border: none;
+      color: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .material-row button:hover { background: #e03c3c; }
+
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+    .btn-add {
+      background: #2a3a50;
+      color: #7eb8ff;
+      border: 1px dashed #7eb8ff55;
+    }
+    .btn-add:hover { background: #334a66; }
+    .btn-calculate {
+      background: linear-gradient(135deg, #4a8cff, #2a5cbd);
+      color: #fff;
+      font-size: 1.1rem;
+      padding: 14px 32px;
+      width: 100%;
+      border-radius: 10px;
+      margin-top: 10px;
+    }
+    .btn-calculate:hover { background: linear-gradient(135deg, #5a9aff, #3a6cdd); }
+
+    /* Results */
+    #results {
+      display: none;
+    }
+    .result-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #2a2d3a;
+      font-size: 0.95rem;
+    }
+    .result-row:last-child { border-bottom: none; }
+    .result-row .label { color: #aaa; }
+    .result-row .value { color: #fff; font-weight: 600; }
+    .result-row.total {
+      font-size: 1.3rem;
+      padding-top: 16px;
+      border-top: 2px solid #4a8cff;
+      border-bottom: none;
+      margin-top: 8px;
+    }
+    .result-row.total .value { color: #4aff8c; }
+
+    .tier-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+    @media (max-width: 600px) {
+      .tier-cards { grid-template-columns: 1fr; }
+    }
+    .tier-card {
+      background: #12141c;
+      border: 1px solid #2a2d3a;
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+    .tier-card.recommended {
+      border-color: #4a8cff;
+      box-shadow: 0 0 20px #4a8cff22;
+    }
+    .tier-card h3 { font-size: 0.9rem; color: #aaa; margin-bottom: 8px; }
+    .tier-card .price { font-size: 1.5rem; font-weight: 700; color: #fff; }
+    .tier-card.recommended .price { color: #4aff8c; }
+    .tier-card .desc { font-size: 0.8rem; color: #666; margin-top: 6px; }
+    .tag {
+      display: inline-block;
+      background: #4a8cff33;
+      color: #7eb8ff;
+      font-size: 0.7rem;
+      padding: 2px 8px;
+      border-radius: 4px;
+      margin-bottom: 6px;
+    }
+
+    /* Recommendations */
+    .rec-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .rec-list li {
+      background: #12141c;
+      border-left: 3px solid #ffaa4a;
+      padding: 12px 16px;
+      border-radius: 0 8px 8px 0;
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .rec-list li strong { color: #ffcc80; }
+
+    /* Print styles */
+    .btn-print {
+      background: #2a3a50;
+      color: #7eb8ff;
+      margin-top: 12px;
+      width: 100%;
+    }
+    .btn-print:hover { background: #334a66; }
+    @media print {
+      body { background: #fff; color: #000; }
+      .section { border-color: #ccc; background: #fff; }
+      .btn, .no-print { display: none !important; }
+      .result-row .label, .result-row .value { color: #000; }
+      .tier-card { border-color: #ccc; background: #f9f9f9; }
+      .tier-card .price, .result-row.total .value { color: #000; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Job Estimate Generator</h1>
+    <p class="subtitle">Enter your job details below to calculate what you should charge</p>
+
+    <!-- Materials -->
+    <div class="section">
+      <h2><span class="icon">&#128230;</span> Materials</h2>
+      <div class="materials-list" id="materialsList">
+        <div class="material-row">
+          <input type="text" placeholder="Material name" class="mat-name">
+          <input type="number" placeholder="Unit cost ($)" class="mat-cost" min="0" step="0.01">
+          <input type="number" placeholder="Qty" class="mat-qty" min="1" value="1">
+          <button onclick="removeMaterial(this)" title="Remove">&times;</button>
+        </div>
+      </div>
+      <button class="btn btn-add" onclick="addMaterial()">+ Add Material</button>
+    </div>
+
+    <!-- Labor -->
+    <div class="section">
+      <h2><span class="icon">&#9997;</span> Labor</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Your Hourly Rate ($)</label>
+          <input type="number" id="hourlyRate" placeholder="e.g. 35" min="0" step="0.50">
+        </div>
+        <div class="form-group">
+          <label>Estimated Hours</label>
+          <input type="number" id="estimatedHours" placeholder="e.g. 8" min="0" step="0.5">
+        </div>
+        <div class="form-group">
+          <label>Skill Level Compared to Pro</label>
+          <select id="skillLevel">
+            <option value="0.7">Beginner (70% of pro rate)</option>
+            <option value="0.85">Intermediate (85% of pro rate)</option>
+            <option value="1.0" selected>Professional (100%)</option>
+            <option value="1.15">Expert / Specialized (115%)</option>
+            <option value="1.3">Master / Niche Expert (130%)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Number of Workers (including you)</label>
+          <input type="number" id="numWorkers" placeholder="1" min="1" value="1">
+        </div>
+      </div>
+    </div>
+
+    <!-- Travel & Expenses -->
+    <div class="section">
+      <h2><span class="icon">&#128663;</span> Travel & Expenses</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Round-Trip Distance (miles)</label>
+          <input type="number" id="travelDistance" placeholder="e.g. 30" min="0">
+        </div>
+        <div class="form-group">
+          <label>Mileage Rate ($/mile)</label>
+          <input type="number" id="mileageRate" placeholder="0.67" min="0" step="0.01" value="0.67">
+        </div>
+        <div class="form-group">
+          <label>Food / Meals ($)</label>
+          <input type="number" id="foodCost" placeholder="e.g. 25" min="0" step="0.01">
+        </div>
+        <div class="form-group">
+          <label>Other Expenses ($)</label>
+          <input type="number" id="otherExpenses" placeholder="e.g. parking, tolls" min="0" step="0.01">
+        </div>
+      </div>
+    </div>
+
+    <!-- Overhead & Profit -->
+    <div class="section">
+      <h2><span class="icon">&#128200;</span> Overhead & Profit</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Overhead / Insurance / Tools (%)</label>
+          <input type="number" id="overheadPct" placeholder="10" min="0" max="100" value="10">
+        </div>
+        <div class="form-group">
+          <label>Desired Profit Margin (%)</label>
+          <input type="number" id="profitPct" placeholder="20" min="0" max="100" value="20">
+        </div>
+        <div class="form-group">
+          <label>Tax Rate (% to set aside)</label>
+          <input type="number" id="taxPct" placeholder="15" min="0" max="100" value="15">
+        </div>
+        <div class="form-group">
+          <label>Contingency Buffer (%)</label>
+          <input type="number" id="contingencyPct" placeholder="10" min="0" max="100" value="10">
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="section">
+      <h2><span class="icon">&#128221;</span> Job Notes</h2>
+      <div class="form-group full-width">
+        <label>Description / Special Considerations</label>
+        <textarea id="jobNotes" placeholder="Describe the job, client requirements, special conditions..."></textarea>
+      </div>
+    </div>
+
+    <button class="btn btn-calculate no-print" onclick="generateEstimate()">Generate Estimate</button>
+
+    <!-- Results -->
+    <div id="results">
+      <div class="section">
+        <h2><span class="icon">&#128176;</span> Cost Breakdown</h2>
+        <div id="breakdown"></div>
+      </div>
+
+      <div class="section">
+        <h2><span class="icon">&#127919;</span> Recommended Pricing Tiers</h2>
+        <p style="color:#888;font-size:0.85rem;margin-bottom:8px;">Three options to present to your client:</p>
+        <div class="tier-cards" id="tiers"></div>
+      </div>
+
+      <div class="section">
+        <h2><span class="icon">&#128161;</span> Recommendations & Things to Consider</h2>
+        <ul class="rec-list" id="recommendations"></ul>
+      </div>
+
+      <button class="btn btn-print no-print" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+  </div>
+
+  <script>
+    function addMaterial() {
+      const list = document.getElementById('materialsList');
+      const row = document.createElement('div');
+      row.className = 'material-row';
+      row.innerHTML = `
+        <input type="text" placeholder="Material name" class="mat-name">
+        <input type="number" placeholder="Unit cost ($)" class="mat-cost" min="0" step="0.01">
+        <input type="number" placeholder="Qty" class="mat-qty" min="1" value="1">
+        <button onclick="removeMaterial(this)" title="Remove">&times;</button>
+      `;
+      list.appendChild(row);
+    }
+
+    function removeMaterial(btn) {
+      const list = document.getElementById('materialsList');
+      if (list.children.length > 1) {
+        btn.parentElement.remove();
+      }
+    }
+
+    function val(id) {
+      return parseFloat(document.getElementById(id).value) || 0;
+    }
+
+    function fmt(n) {
+      return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function generateEstimate() {
+      // Materials
+      let materialsCost = 0;
+      const rows = document.querySelectorAll('.material-row');
+      rows.forEach(row => {
+        const cost = parseFloat(row.querySelector('.mat-cost').value) || 0;
+        const qty = parseFloat(row.querySelector('.mat-qty').value) || 1;
+        materialsCost += cost * qty;
+      });
+
+      // Labor
+      const hourlyRate = val('hourlyRate');
+      const hours = val('estimatedHours');
+      const skillMult = parseFloat(document.getElementById('skillLevel').value);
+      const workers = Math.max(1, val('numWorkers'));
+      const laborCost = hourlyRate * hours * skillMult * workers;
+
+      // Travel
+      const distance = val('travelDistance');
+      const mileageRate = val('mileageRate');
+      const travelCost = distance * mileageRate;
+      const foodCost = val('foodCost');
+      const otherExpenses = val('otherExpenses');
+      const totalTravel = travelCost + foodCost + otherExpenses;
+
+      // Subtotal before markups
+      const directCosts = materialsCost + laborCost + totalTravel;
+
+      // Overhead
+      const overheadPct = val('overheadPct') / 100;
+      const overheadAmount = directCosts * overheadPct;
+
+      // Contingency
+      const contingencyPct = val('contingencyPct') / 100;
+      const contingencyAmount = directCosts * contingencyPct;
+
+      const costBase = directCosts + overheadAmount + contingencyAmount;
+
+      // Profit
+      const profitPct = val('profitPct') / 100;
+      const profitAmount = costBase * profitPct;
+
+      const totalBeforeTax = costBase + profitAmount;
+
+      // Tax set-aside
+      const taxPct = val('taxPct') / 100;
+      const taxAmount = totalBeforeTax * taxPct;
+
+      const grandTotal = totalBeforeTax + taxAmount;
+
+      // Render breakdown
+      const breakdown = document.getElementById('breakdown');
+      breakdown.innerHTML = `
+        <div class="result-row"><span class="label">Materials</span><span class="value">${fmt(materialsCost)}</span></div>
+        <div class="result-row"><span class="label">Labor (${hours}h x ${fmt(hourlyRate)} x ${skillMult} skill x ${workers} worker${workers>1?'s':''})</span><span class="value">${fmt(laborCost)}</span></div>
+        <div class="result-row"><span class="label">Travel (${distance} mi x ${fmt(mileageRate)}/mi)</span><span class="value">${fmt(travelCost)}</span></div>
+        <div class="result-row"><span class="label">Food / Meals</span><span class="value">${fmt(foodCost)}</span></div>
+        <div class="result-row"><span class="label">Other Expenses</span><span class="value">${fmt(otherExpenses)}</span></div>
+        <div class="result-row" style="border-top:1px solid #333;padding-top:12px"><span class="label">Direct Costs Subtotal</span><span class="value">${fmt(directCosts)}</span></div>
+        <div class="result-row"><span class="label">Overhead (${(overheadPct*100).toFixed(0)}%)</span><span class="value">${fmt(overheadAmount)}</span></div>
+        <div class="result-row"><span class="label">Contingency Buffer (${(contingencyPct*100).toFixed(0)}%)</span><span class="value">${fmt(contingencyAmount)}</span></div>
+        <div class="result-row"><span class="label">Profit Margin (${(profitPct*100).toFixed(0)}%)</span><span class="value">${fmt(profitAmount)}</span></div>
+        <div class="result-row"><span class="label">Tax Set-Aside (${(taxPct*100).toFixed(0)}%)</span><span class="value">${fmt(taxAmount)}</span></div>
+        <div class="result-row total"><span class="label">TOTAL ESTIMATE</span><span class="value">${fmt(grandTotal)}</span></div>
+      `;
+
+      // Pricing tiers
+      const tiers = document.getElementById('tiers');
+      const budget = grandTotal * 0.85;
+      const premium = grandTotal * 1.2;
+      tiers.innerHTML = `
+        <div class="tier-card">
+          <h3>Budget</h3>
+          <div class="desc">Bare minimum, tight margins</div>
+          <div class="price">${fmt(budget)}</div>
+          <div class="desc">-15% from standard</div>
+        </div>
+        <div class="tier-card recommended">
+          <span class="tag">RECOMMENDED</span>
+          <h3>Standard</h3>
+          <div class="desc">Fair price, sustainable profit</div>
+          <div class="price">${fmt(grandTotal)}</div>
+          <div class="desc">Covers all costs + profit</div>
+        </div>
+        <div class="tier-card">
+          <h3>Premium</h3>
+          <div class="desc">Rush jobs, complex work, priority</div>
+          <div class="price">${fmt(premium)}</div>
+          <div class="desc">+20% from standard</div>
+        </div>
+      `;
+
+      // Recommendations
+      const recs = [];
+      recs.push(`<li><strong>Permits & Licenses:</strong> Check if the job requires any permits, licenses, or certifications. These can add cost and delay if overlooked.</li>`);
+      recs.push(`<li><strong>Scope Creep Protection:</strong> Define exactly what's included. Write a clear scope of work so the client can't add "just one more thing" for free.</li>`);
+      recs.push(`<li><strong>Payment Terms:</strong> Consider requiring 50% upfront and 50% on completion, or milestone-based payments for larger jobs.</li>`);
+      recs.push(`<li><strong>Warranty / Guarantee:</strong> Decide if you'll offer a warranty period. Factor in potential callback costs.</li>`);
+      recs.push(`<li><strong>Disposal & Cleanup:</strong> Will you need to haul away debris or old materials? Dump fees and time add up.</li>`);
+
+      if (materialsCost > 0) {
+        recs.push(`<li><strong>Material Markup:</strong> Many pros mark up materials 10-20% to cover sourcing time, returns, and waste. Your materials total is ${fmt(materialsCost)} - consider if you've accounted for waste.</li>`);
+      }
+      if (hours > 6) {
+        recs.push(`<li><strong>Long Job Buffer:</strong> Jobs over 6 hours often run longer than expected. Your ${hours}h estimate should include buffer time for setup, cleanup, and unexpected issues.</li>`);
+      }
+      if (distance > 50) {
+        recs.push(`<li><strong>Long Distance Premium:</strong> At ${distance} miles round-trip, consider charging a trip fee on top of mileage to compensate for lost work time while driving.</li>`);
+      }
+      if (workers > 1) {
+        recs.push(`<li><strong>Worker Costs:</strong> With ${workers} workers, ensure you've factored in their actual pay rate, workers' comp insurance, and any subcontractor fees.</li>`);
+      }
+      if (laborCost === 0) {
+        recs.push(`<li><strong>Don't Forget Your Time:</strong> You haven't entered labor costs. Your time has value - always charge for it, even if it's "just a quick job."</li>`);
+      }
+
+      recs.push(`<li><strong>Competitor Research:</strong> Look up what others in your area charge for similar work. Price too low and you lose money; too high and you lose clients.</li>`);
+      recs.push(`<li><strong>Insurance & Liability:</strong> If you don't have liability insurance, one accident could cost more than years of profit. Factor insurance premiums into overhead.</li>`);
+      recs.push(`<li><strong>Seasonal Demand:</strong> Prices can vary by season. If you're in high-demand season, you can charge closer to the premium tier.</li>`);
+      recs.push(`<li><strong>Client Relationship:</strong> Repeat clients may warrant a small discount. New clients with complex jobs may warrant a premium for the unknown.</li>`);
+
+      document.getElementById('recommendations').innerHTML = recs.join('');
+
+      // Show results
+      document.getElementById('results').style.display = 'block';
+      document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+    }
+  </script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./service-worker.js');
+    }
+  </script>
+</body>
+</html>
