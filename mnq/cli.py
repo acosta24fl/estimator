@@ -321,6 +321,44 @@ def cmd_discover(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_crossval(args, cfg: Config) -> int:
+    """Train on other index futures, test on MNQ."""
+    from .models.crossval import (
+        DEFAULT_TEST_SYMBOL, DEFAULT_TRAIN_SYMBOLS, cross_instrument_evaluate,
+        format_report,
+    )
+
+    # Cross-instrument only makes sense on the wide profile: intraday history is
+    # capped at 60 days per symbol, which is far too short to pool.
+    args.profile = "wide"
+    _apply_profile(args, cfg)
+
+    context: dict[str, pd.DataFrame] = {}
+    if cfg.context.enabled:
+        from .data.context import fetch_context
+
+        try:
+            context = fetch_context(
+                cfg.context, cfg.path(cfg.context.cache_dir), cfg.data.tz,
+                refresh=not args.no_refresh,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logging.warning("context unavailable (%s); price-only", exc)
+
+    train = tuple(args.train.split(",")) if args.train else DEFAULT_TRAIN_SYMBOLS
+    results = cross_instrument_evaluate(
+        cfg, train_symbols=train, test_symbol=args.test or DEFAULT_TEST_SYMBOL,
+        context=context, n_folds=args.folds, refresh=not args.no_refresh,
+    )
+
+    print()
+    print(format_report(results))
+    (ARTIFACT_DIR / "crossval_results.json").write_text(
+        json.dumps(results, indent=2, default=float)
+    )
+    return 0
+
+
 def cmd_validate(args, cfg: Config) -> int:
     """Attack the chosen configuration rather than celebrate it."""
     from .backtest.validate import format_report, validate
@@ -579,6 +617,18 @@ def build_parser() -> argparse.ArgumentParser:
                     help="fraction of history to mine; the rest validates")
     sp.add_argument("--min-samples", type=int, default=150)
     sp.set_defaults(func=cmd_discover)
+
+    sp = sub.add_parser(
+        "crossval",
+        help="train on other index futures and test on MNQ (strongest test)",
+    )
+    add_data_args(sp)
+    sp.add_argument("--train", type=str, default=None,
+                    help="comma-separated training symbols (default: ES=F,YM=F,RTY=F)")
+    sp.add_argument("--test", type=str, default=None,
+                    help="symbol to test on (default: MNQ=F)")
+    sp.add_argument("--folds", type=int, default=4)
+    sp.set_defaults(func=cmd_crossval)
 
     sp = sub.add_parser(
         "validate",

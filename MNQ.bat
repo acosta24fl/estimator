@@ -98,8 +98,9 @@ echo   1  Update price data        (run weekly - builds history)
 echo   2  Compare configurations   (the 4-way experiment)
 echo   3  Train + backtest         (train, price it, sweep thresholds)
 echo   4  Validate a result        (permutation test - is it real?)
-echo   5  Show status
-echo   6  Run the tests
+echo   5  Cross-instrument test    (train on ES/YM/RTY, predict MNQ)
+echo   6  Show status
+echo   7  Run the tests
 echo.
 echo   0  Exit
 echo.
@@ -109,8 +110,9 @@ if "%CHOICE%"=="1" goto :do_fetch
 if "%CHOICE%"=="2" goto :do_experiment
 if "%CHOICE%"=="3" goto :do_backtest
 if "%CHOICE%"=="4" goto :do_validate
-if "%CHOICE%"=="5" goto :do_status
-if "%CHOICE%"=="6" goto :do_tests
+if "%CHOICE%"=="5" goto :do_crossval
+if "%CHOICE%"=="6" goto :do_status
+if "%CHOICE%"=="7" goto :do_tests
 if "%CHOICE%"=="0" exit /b 0
 echo   Not a valid choice.
 goto :menu
@@ -162,6 +164,23 @@ echo   The p-value decides it:
 echo     below 0.05   real enough to paper trade
 echo     0.05 - 0.20  not established
 echo     above 0.20   the model adds nothing - do not trade it
+goto :done
+
+:do_crossval
+echo.
+echo   Training on ES, YM and RTY - never on MNQ - then predicting MNQ.
+echo.
+echo   This is the strongest test available. There are no shared bars, so
+echo   a pattern that transfers is a property of index futures rather
+echo   than something memorised about MNQ. It also triples the training
+echo   data using symbols you already download.
+echo.
+echo   Takes 30-60 minutes.
+echo.
+"%VPY%" -m mnq.cli crossval
+echo.
+echo   AUC 0.55+ = the edge transfers, and pooled training is worth doing.
+echo   AUC near 0.50 = it does not, and the earlier result was noise.
 goto :done
 
 :do_status
