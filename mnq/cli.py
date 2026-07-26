@@ -321,6 +321,31 @@ def cmd_discover(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_validate(args, cfg: Config) -> int:
+    """Attack the chosen configuration rather than celebrate it."""
+    from .backtest.validate import format_report, validate
+
+    cfg.trade.min_probability = args.min_probability
+    if args.trail is not None:
+        cfg.trade.trail_atr_mult = args.trail
+
+    data, preds = _predictions_for_backtest(args, cfg)
+
+    sweep_path = ARTIFACT_DIR / "sweep_decision.csv"
+    sweep = pd.read_csv(sweep_path) if sweep_path.exists() else None
+    if sweep is None:
+        logging.info("no sweep_decision.csv found; skipping the multiple-comparison check")
+
+    report = validate(data.matrix, preds, cfg, sweep, n_permutations=args.permutations)
+    print()
+    print(format_report(report, cfg))
+
+    report.threshold_curve.to_csv(ARTIFACT_DIR / "validation_thresholds.csv", index=False)
+    report.quarterly.to_csv(ARTIFACT_DIR / "validation_quarterly.csv", index=False)
+    print(f"\nDetail written to {ARTIFACT_DIR}")
+    return 0
+
+
 def cmd_experiment(args, cfg: Config) -> int:
     """Run the decisive comparison: timeframe profile x cross-asset context.
 
@@ -554,6 +579,20 @@ def build_parser() -> argparse.ArgumentParser:
                     help="fraction of history to mine; the rest validates")
     sp.add_argument("--min-samples", type=int, default=150)
     sp.set_defaults(func=cmd_discover)
+
+    sp = sub.add_parser(
+        "validate",
+        help="stress-test a chosen configuration (permutation test and more)",
+    )
+    add_data_args(sp)
+    sp.add_argument("--min-probability", type=float, default=0.62,
+                    help="the entry threshold to validate (default: 0.62)")
+    sp.add_argument("--trail", type=float, default=None,
+                    help="override trail_atr_mult")
+    sp.add_argument("--permutations", type=int, default=200,
+                    help="number of null runs (more is slower but sharper)")
+    sp.add_argument("--retrain", action="store_true")
+    sp.set_defaults(func=cmd_validate)
 
     sp = sub.add_parser(
         "experiment",

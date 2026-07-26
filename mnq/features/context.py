@@ -114,8 +114,12 @@ def build_context_features(
             )
 
     out = pd.concat(blocks, axis=1) if blocks else pd.DataFrame(index=base_index)
-    _add_volatility_regime(out, cfg)
-    _add_risk_appetite(out, cfg)
+
+    # The derived blocks are appended in one concat for the same reason as
+    # above: appending them individually re-fragments the frame.
+    derived = [s for s in (_volatility_regime(out, cfg) + _risk_appetite(out, cfg))]
+    if derived:
+        out = pd.concat([out, *derived], axis=1)
 
     # Final guard. Tree models handle NaN natively but XGBoost rejects inf
     # outright, and a single infinite cell aborts an entire training run.
@@ -158,7 +162,7 @@ def _merge_on_close(
     return merged.drop(columns=["_asof", "_available_at"])
 
 
-def _add_volatility_regime(out: pd.DataFrame, cfg: ContextConfig) -> None:
+def _volatility_regime(out: pd.DataFrame, cfg: ContextConfig) -> list[pd.Series]:
     """VIX level, percentile and direction.
 
     The percentile is the feature that actually generalises - it is comparable
@@ -167,19 +171,20 @@ def _add_volatility_regime(out: pd.DataFrame, cfg: ContextConfig) -> None:
     level_col = f"{PREFIX}vix_zscore"
     ret_col = f"{PREFIX}vix_ret{cfg.return_windows[0]}"
     if level_col not in out:
-        return
+        return []
 
-    # Reconstruct an approximate level series from the z-score for ranking;
-    # ranking is monotonic so the z-score ranks identically to the level.
-    out[f"{PREFIX}vix_percentile"] = _percentile_rank(
-        out[level_col], cfg.vix_percentile_window
-    )
+    # Ranking is monotonic, so the z-score ranks identically to the raw level.
+    series = [
+        _percentile_rank(out[level_col], cfg.vix_percentile_window)
+        .rename(f"{PREFIX}vix_percentile")
+    ]
     if ret_col in out:
         # A volatility spike is a regime change; a drift is not.
-        out[f"{PREFIX}vix_spike"] = (out[ret_col] > 5.0).astype(float)
+        series.append((out[ret_col] > 5.0).astype(float).rename(f"{PREFIX}vix_spike"))
+    return series
 
 
-def _add_risk_appetite(out: pd.DataFrame, cfg: ContextConfig) -> None:
+def _risk_appetite(out: pd.DataFrame, cfg: ContextConfig) -> list[pd.Series]:
     """Composite risk-on/risk-off score.
 
     Averages the signals that tend to move together when the market's appetite
@@ -194,7 +199,7 @@ def _add_risk_appetite(out: pd.DataFrame, cfg: ContextConfig) -> None:
     on = [c for c in risk_on if c in out]
     off = [c for c in risk_off if c in out]
     if not on and not off:
-        return
+        return []
 
     # Standardise each leg before combining; otherwise the most volatile asset
     # silently dominates the composite.
@@ -209,18 +214,20 @@ def _add_risk_appetite(out: pd.DataFrame, cfg: ContextConfig) -> None:
 
     on_z, off_z = _standardise(on), _standardise(off)
     if on_z is not None and off_z is not None:
-        out[f"{PREFIX}risk_appetite"] = on_z - off_z
+        appetite = on_z - off_z
     elif on_z is not None:
-        out[f"{PREFIX}risk_appetite"] = on_z
+        appetite = on_z
     else:
-        out[f"{PREFIX}risk_appetite"] = -off_z
+        appetite = -off_z
+    series = [appetite.rename(f"{PREFIX}risk_appetite")]
 
     # Breadth: equal-weight versus cap-weight. When RSP lags badly, a handful of
     # mega-caps are carrying the index - a notoriously fragile configuration for
     # a Nasdaq-heavy contract.
     rsp, es = f"{PREFIX}rsp_ret{w}", f"{PREFIX}es_ret{w}"
     if rsp in out and es in out:
-        out[f"{PREFIX}breadth_divergence"] = out[rsp] - out[es]
+        series.append((out[rsp] - out[es]).rename(f"{PREFIX}breadth_divergence"))
+    return series
 
 
 def context_feature_columns(matrix: pd.DataFrame) -> list[str]:
