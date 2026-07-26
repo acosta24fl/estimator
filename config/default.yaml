@@ -1,0 +1,94 @@
+# MNQ signal system configuration.
+#
+# Every value below is also the built-in default, so this file documents the
+# full surface. Pass it with:  python -m mnq.cli --config config/default.yaml ...
+#
+# Secrets are NOT read from here. Put TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and
+# TV_WEBHOOK_SECRET in the environment (or .env) so this file stays committable.
+
+data:
+  symbol: "MNQ=F"
+  # Yahoo's intraday limits: ~60 days of sub-hourly bars, ~730 days of hourly.
+  # The 4h timeframe is built by resampling hourly bars, not requested directly.
+  base_interval: "5m"
+  base_lookback: "60d"
+  mid_interval: "15m"
+  mid_lookback: "60d"
+  high_interval: "1h"
+  high_lookback: "730d"
+  high_resample: "4h"
+  cache_dir: "artifacts/data"
+  tz: "UTC"
+  # Drop CME's 17:00-18:00 ET settlement break: near-zero volume, erratic prints.
+  drop_maintenance_break: true
+
+features:
+  ema_spans: [8, 9, 21, 50, 200]
+  slope_windows: [20, 50]
+  ema_slope_window: 5
+  momentum_window: 10
+  hh_ll_window: 5
+  atr_window: 14
+  atr_accel_lag: 12
+  bb_window: 20
+  bb_std: 2.0          # 2 sigma each side = the 4 sigma band width
+  rsi_window: 14
+  macd_fast: 12
+  macd_slow: 26
+  macd_signal: 9
+  adx_window: 14
+  volume_sma: 20
+
+labels:
+  # Triple barrier. Targets are ATR multiples so they stay reachable in any
+  # volatility regime.
+  horizon_bars: 24         # 24 x 5m = 2 hours to resolve
+  tp_atr_mult: 2.0
+  sl_atr_mult: 1.0
+  min_target_points: 20.0  # the low end of the 20-250 point ambition
+  max_target_points: 300.0
+  fwd_return_bars: 12      # horizon for the shared regression target
+
+model:
+  meta_inner_folds: 4      # inner CV producing out-of-fold base predictions
+  wf_initial_train: 0.5    # first walk-forward training window
+  wf_folds: 5
+  embargo_bars: 36         # MUST exceed labels.horizon_bars or labels leak
+  random_state: 7
+
+trade:
+  # Fill assumptions. Do not set these to zero: a backtest without costs will
+  # happily approve a strategy that loses money in practice.
+  slippage_ticks: 1.0
+  commission_usd_per_side: 0.37
+  contracts: 1
+
+  # Entry gates. Set these from `sweep` output, not by intuition.
+  min_probability: 0.58
+  min_edge_points: 20.0
+  max_concurrent_trades: 1
+  cooldown_bars: 6         # 30 minutes between signals
+
+  # Open-trade management.
+  enable_monitor: true
+  breakeven_at_r: 1.0      # stop to entry+1 tick after +1R
+  trail_atr_mult: 1.5      # trail this far behind the running extreme
+  trail_start_r: 1.5       # only start trailing after +1.5R
+  early_exit_prob: 0.35    # close when continuation confidence drops below this
+  early_exit_min_bars: 3   # give the trade room before judging it
+  max_hold_bars: 48        # 4 hours
+  time_stop_r: 0.0         # at max_hold, exit only if not yet profitable
+
+telegram:
+  enabled: true
+  include_features: true   # show the per-model breakdown in each signal
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  signal_interval_minutes: 10
+  bar_store_path: "artifacts/live_bars.csv"
+  state_path: "artifacts/live_state.json"
+  max_bars_retained: 200000
+
+model_dir: "artifacts/models"
