@@ -62,7 +62,10 @@ def build_context_features(
         return pd.DataFrame(index=base_index)
 
     base_close_time = base_index + pd.Timedelta(minutes=base_minutes)
-    out = pd.DataFrame(index=base_index)
+
+    # Columns are accumulated and concatenated once. Assigning ~120 columns one
+    # at a time fragments the frame badly enough that pandas warns about it.
+    blocks: list[pd.Series] = []
 
     # MNQ's own returns, needed as the reference leg for relative strength.
     own_returns = {w: _returns(base_close, w) for w in cfg.return_windows}
@@ -92,26 +95,52 @@ def build_context_features(
         feats["_available_at"] = frame.index + span
 
         merged = _merge_on_close(feats, base_close_time, base_index)
-        out = out.join(merged)
+        for col in merged.columns:
+            blocks.append(merged[col])
 
         # Relative strength and correlation are computed after alignment so both
         # legs sit on the same clock.
         for w in cfg.return_windows:
             col = f"{PREFIX}{name}_ret{w}"
-            if col in out:
-                out[f"{PREFIX}{name}_rs{w}"] = own_returns[w] - out[col]
+            if col in merged:
+                blocks.append((own_returns[w] - merged[col]).rename(f"{PREFIX}{name}_rs{w}"))
 
         ret1_col = f"{PREFIX}{name}_ret1"
-        if ret1_col in out:
+        if ret1_col in merged:
             own1 = own_returns[cfg.return_windows[0]]
-            out[f"{PREFIX}{name}_corr"] = (
-                own1.rolling(cfg.correlation_window, min_periods=cfg.correlation_window // 2)
-                .corr(out[ret1_col])
+            blocks.append(
+                _safe_rolling_corr(own1, merged[ret1_col], cfg.correlation_window)
+                .rename(f"{PREFIX}{name}_corr")
             )
 
+    out = pd.concat(blocks, axis=1) if blocks else pd.DataFrame(index=base_index)
     _add_volatility_regime(out, cfg)
     _add_risk_appetite(out, cfg)
-    return out
+
+    # Final guard. Tree models handle NaN natively but XGBoost rejects inf
+    # outright, and a single infinite cell aborts an entire training run.
+    return out.replace([np.inf, -np.inf], np.nan)
+
+
+def _safe_rolling_corr(a: pd.Series, b: pd.Series, window: int) -> pd.Series:
+    """Rolling correlation that returns NaN instead of inf on a flat window.
+
+    RTH-only instruments (the ETFs in the basket) go stale overnight, so the
+    merged series repeats a single value for hours. Variance over that window is
+    zero, the correlation is 0/0, and pandas can emit +/-inf rather than NaN.
+    That is undefined, not infinite, so it is reported as missing.
+    """
+    min_periods = max(2, window // 2)
+    corr = a.rolling(window, min_periods=min_periods).corr(b)
+
+    # Mask windows where either leg is effectively constant.
+    std_a = a.rolling(window, min_periods=min_periods).std(ddof=0)
+    std_b = b.rolling(window, min_periods=min_periods).std(ddof=0)
+    flat = (std_a.abs() < 1e-12) | (std_b.abs() < 1e-12)
+    corr = corr.where(~flat)
+
+    # Correlation is bounded; anything outside [-1, 1] is numerical noise.
+    return corr.where(corr.abs() <= 1.0).replace([np.inf, -np.inf], np.nan)
 
 
 def _merge_on_close(

@@ -9,6 +9,7 @@ completed one.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -116,6 +117,62 @@ def test_context_does_not_predict_the_next_bar_directly(base, ctx_features):
         if corr > 0.30:
             suspicious.append((col, round(float(corr), 3)))
     assert not suspicious, f"context features leaking the next bar: {suspicious}"
+
+
+def test_stale_rth_only_symbols_do_not_produce_inf(base, context):
+    """Regression: RTH-only ETFs go flat overnight and broke training.
+
+    HYG, SOXX and RSP stop trading outside cash hours, so the merged series
+    repeats one value for hours. Variance over the correlation window is zero,
+    the correlation is 0/0, and pandas emitted +/-inf. XGBoost rejects inf
+    outright, which aborted the entire run rather than degrading.
+    """
+    ctx = {k: v.copy() for k, v in context.items()}
+    for sym in ("hyg", "sox"):
+        et = ctx[sym].index.tz_convert("America/New_York")
+        ctx[sym] = ctx[sym][(et.hour >= 10) & (et.hour < 16) & (et.dayofweek < 5)]
+
+    feats = build_context_features(base.index, base["close"], ctx, ContextConfig(), 5)
+    arr = feats.to_numpy(dtype=float)
+    assert not np.isinf(arr).any(), "infinite values would abort XGBoost training"
+
+    # The correlations must still be usable, not blanked wholesale.
+    corr_cols = [c for c in feats.columns if c.endswith("_corr")]
+    assert corr_cols
+    assert feats[corr_cols].notna().mean().mean() > 0.5
+
+
+def test_correlations_stay_within_bounds(ctx_features):
+    corr_cols = [c for c in ctx_features.columns if c.endswith("_corr")]
+    for col in corr_cols:
+        vals = ctx_features[col].dropna()
+        assert vals.between(-1.0, 1.0).all(), f"{col} outside [-1, 1]"
+
+
+def test_safe_rolling_corr_handles_a_flat_series():
+    from mnq.features.context import _safe_rolling_corr
+
+    idx = pd.date_range("2025-01-01", periods=100, freq="5min", tz="UTC")
+    varying = pd.Series(np.random.default_rng(0).normal(size=100), index=idx)
+    flat = pd.Series(np.zeros(100), index=idx)
+    out = _safe_rolling_corr(varying, flat, 20)
+    assert not np.isinf(out.to_numpy(dtype=float)).any()
+    assert out.isna().all(), "correlation with a constant series is undefined"
+
+
+def test_prepare_strips_infinities(minutes, context):
+    """The pipeline must sanitise inf even if a feature slips through."""
+    from mnq.models.train import prepare
+
+    cfg = Config()
+    frames = {
+        "5m": resample_ohlcv(minutes, "5min"),
+        "15m": resample_ohlcv(minutes, "15min"),
+        "4h": resample_ohlcv(minutes, "4h"),
+    }
+    data = prepare(frames, cfg, context)
+    arr = data.features.to_numpy(dtype=float)
+    assert not np.isinf(arr).any()
 
 
 def test_missing_symbols_degrade_gracefully(base, context):

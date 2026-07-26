@@ -220,6 +220,31 @@ def cmd_backtest(args, cfg: Config) -> int:
     print()
     print(result.report("MNQ walk-forward backtest"))
 
+    if result.metrics["n_trades"] == 0:
+        # An empty backtest is ambiguous: it can mean the gates are too tight or
+        # that something is broken. Show the distribution so it is neither.
+        print("\nWhy no trades fired:")
+        print(f"  min_probability = {cfg.trade.min_probability:.2f}, "
+              f"min_edge_points = {cfg.trade.min_edge_points:.0f}")
+        for side in ("long", "short"):
+            col = f"{side}_p_meta"
+            if col not in preds:
+                continue
+            s = preds[col].dropna()
+            if s.empty:
+                continue
+            over = (s >= cfg.trade.min_probability).sum()
+            print(f"  {side:>5} probability: max {s.max():.3f}  p99 {s.quantile(0.99):.3f} "
+                  f" p95 {s.quantile(0.95):.3f}   bars over threshold: {over}")
+        atr = data.matrix["atr"].dropna()
+        if len(atr):
+            target = atr * cfg.labels.tp_atr_mult
+            print(f"  target size: median {target.median():.0f} pts, "
+                  f"{(target >= cfg.trade.min_edge_points).mean():.0%} of bars clear "
+                  f"min_edge_points")
+        print("\n  Lower trade.min_probability toward the p95 above, or run "
+              "`sweep` to choose it against both sample halves.")
+
     if not result.frame.empty:
         path = ARTIFACT_DIR / "backtest_trades.csv"
         result.frame.to_csv(path, index=False)

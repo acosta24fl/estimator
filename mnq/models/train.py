@@ -74,6 +74,15 @@ def prepare(
 
     names = feature_columns(matrix)
 
+    # Tree models treat NaN as "missing" and handle it natively, but XGBoost
+    # rejects inf and aborts the whole run. Any infinity here is a degenerate
+    # division (a flat window, a zero denominator), which means "undefined" -
+    # so it is recorded as missing rather than as a very large number.
+    n_inf = int(np.isinf(matrix[names].to_numpy(dtype=float)).sum())
+    if n_inf:
+        log.warning("replacing %d infinite feature values with NaN", n_inf)
+        matrix[names] = matrix[names].replace([np.inf, -np.inf], np.nan)
+
     labels = {d: build_labels(matrix, cfg.labels, d) for d in (LONG, SHORT)}
     fwd = forward_return(matrix, cfg.labels.fwd_return_bars)
 
