@@ -58,12 +58,32 @@ moves the market does not offer.
 
 ## Setup
 
+**Windows:** double-click `MNQ.bat`. It installs what it needs on first run and
+then shows a menu. There is no separate setup step.
+
+**Everything else:**
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env    # then fill in the three values
 ```
+
+### Keep your data outside the code folder
+
+Set `MNQ_HOME` and the cached price history, trained models and reports live
+there instead of inside the checkout:
+
+```bash
+export MNQ_HOME="$HOME/mnq-data"        # Windows: MNQ.bat does this for you
+```
+
+This matters more than it sounds. Downloading two years of hourly bars for
+thirteen instruments and training the ensemble takes real time, and without
+`MNQ_HOME` every code update throws all of it away. With it set, the code
+directory is disposable: replace it, rerun, and the expensive artifacts are
+still there. `MNQ.bat` defaults it to `%USERPROFILE%\mnq-data`.
 
 Secrets are read from the environment only, never from the YAML config, so
 `config/default.yaml` stays safe to commit.

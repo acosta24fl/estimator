@@ -16,7 +16,23 @@ from typing import Any, TYPE_CHECKING
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-ARTIFACT_DIR = REPO_ROOT / "artifacts"
+
+
+def artifact_root() -> Path:
+    """Where cached data, trained models and reports live.
+
+    Defaults to the code directory, but ``MNQ_HOME`` moves it outside. That
+    matters in practice: the code folder is replaced wholesale on every update,
+    and without this every update would discard the Yahoo cache and the trained
+    models, forcing a full re-download and retrain. Pointing MNQ_HOME at a
+    stable location makes the code disposable and the expensive artifacts
+    permanent.
+    """
+    env = os.getenv("MNQ_HOME")
+    return Path(env).expanduser().resolve() if env else REPO_ROOT
+
+
+ARTIFACT_DIR = artifact_root() / "artifacts"
 
 if TYPE_CHECKING:
     from .data.context import ContextConfig
@@ -273,7 +289,11 @@ class Config:
         return out
 
     def path(self, attr: str) -> Path:
-        """Resolve a configured relative path against the repo root."""
+        """Resolve a configured relative path against the artifact root.
+
+        Relative paths follow MNQ_HOME so caches and models survive a code
+        update; absolute paths are respected as given.
+        """
         value = attr if "/" in attr else getattr(self, attr)
         p = Path(value)
-        return p if p.is_absolute() else REPO_ROOT / p
+        return p if p.is_absolute() else artifact_root() / p
