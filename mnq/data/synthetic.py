@@ -116,14 +116,74 @@ def generate_minute_bars(
 
 
 def generate_frames(
-    n_minutes: int = 60 * 24 * 90, seed: int = 11, **kwargs
+    n_minutes: int = 60 * 24 * 90,
+    seed: int = 11,
+    profile: str = "intraday",
+    **kwargs,
 ) -> dict[str, pd.DataFrame]:
     """Synthetic equivalent of :func:`mnq.data.yahoo.fetch_all`."""
     from .yahoo import resample_ohlcv
 
     minutes = generate_minute_bars(n_minutes=n_minutes, seed=seed, **kwargs)
+    if profile == "wide":
+        return {
+            "1h": resample_ohlcv(minutes, "1h"),
+            "4h": resample_ohlcv(minutes, "4h"),
+            "1d": resample_ohlcv(minutes, "1D"),
+        }
     return {
         "5m": resample_ohlcv(minutes, "5min"),
         "15m": resample_ohlcv(minutes, "15min"),
         "4h": resample_ohlcv(minutes, "4h"),
     }
+
+
+def generate_context(
+    base_minutes: pd.DataFrame,
+    names: tuple[str, ...] = ("es", "zn", "vix", "gc", "hyg", "rty", "sox", "rsp", "jpy"),
+    interval: str = "1h",
+    seed: int = 23,
+    correlation: float = 0.6,
+) -> dict[str, pd.DataFrame]:
+    """Synthetic cross-asset basket correlated with the base series.
+
+    Each asset is a blend of the base instrument's returns and its own noise, so
+    the correlation and relative-strength features have realistic structure to
+    chew on. As with the price generator, this validates the plumbing only - the
+    correlations are invented.
+    """
+    from .yahoo import resample_ohlcv
+
+    rng = np.random.default_rng(seed)
+    base_ret = np.log(base_minutes["close"]).diff().fillna(0.0).to_numpy()
+    n = len(base_ret)
+    out: dict[str, pd.DataFrame] = {}
+
+    for i, name in enumerate(names):
+        # VIX and bonds move against equities; the rest move with them.
+        sign = -1.0 if name in ("vix", "zn", "gc", "jpy") else 1.0
+        # VIX is far more volatile than an index future.
+        scale = 6.0 if name == "vix" else 1.0
+        own = rng.normal(0.0, 1.2e-4 * scale, n)
+        blended = sign * correlation * base_ret * scale + (1 - correlation) * own
+
+        start = {"vix": 18.0, "zn": 110.0, "gc": 2400.0, "hyg": 79.0,
+                 "jpy": 0.0068}.get(name, 5000.0 + i * 300)
+        close = start * np.exp(np.cumsum(blended))
+        wick = np.abs(rng.normal(0, 1, n)) * close * 8e-5 * scale
+
+        df = pd.DataFrame(
+            {
+                "open": np.concatenate([[close[0]], close[:-1]]),
+                "high": close + wick,
+                "low": close - wick,
+                "close": close,
+                "volume": rng.gamma(2.0, 50.0, n),
+            },
+            index=base_minutes.index,
+        )
+        df["high"] = df[["open", "high", "low", "close"]].max(axis=1)
+        df["low"] = df[["open", "high", "low", "close"]].min(axis=1)
+        out[name] = resample_ohlcv(df, interval)
+
+    return out

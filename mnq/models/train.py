@@ -46,10 +46,32 @@ class TrainingData:
     feature_names: list[str]
 
 
-def prepare(frames: dict[str, pd.DataFrame], cfg: Config) -> TrainingData:
-    """Features + labels + regression target, sharing one index."""
-    matrix = build_feature_matrix(frames, cfg.features)
-    matrix = add_session_features(matrix)
+def prepare(
+    frames: dict[str, pd.DataFrame],
+    cfg: Config,
+    context: dict[str, pd.DataFrame] | None = None,
+) -> TrainingData:
+    """Features + labels + regression target, sharing one index.
+
+    ``context`` is the optional cross-asset basket from
+    :func:`mnq.data.context.fetch_context`; when supplied its ``ctx_`` features
+    are merged in on completion time alongside the price features.
+    """
+    timeframes = cfg.data.timeframes()
+    base_tf = timeframes[0]
+
+    matrix = build_feature_matrix(frames, cfg.features, timeframes)
+    matrix = add_session_features(matrix, base_tf.prefix)
+
+    if context:
+        from ..features.context import build_context_features
+
+        ctx = build_context_features(
+            matrix.index, matrix["close"], context, cfg.context, base_tf.minutes
+        )
+        matrix = matrix.join(ctx)
+        log.info("added %d cross-asset context features", ctx.shape[1])
+
     names = feature_columns(matrix)
 
     labels = {d: build_labels(matrix, cfg.labels, d) for d in (LONG, SHORT)}

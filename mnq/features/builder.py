@@ -20,14 +20,45 @@ window and collapses the moment the index trades outside it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pandas as pd
 
 from .. import indicators as ind
 from ..config import FeatureConfig
 
-TIMEFRAME_MINUTES = {"5m": 5, "15m": 15, "4h": 240}
-PREFIXES = {"5m": "tf5_", "15m": "tf15_", "4h": "tf4h_"}
+@dataclass(frozen=True)
+class Timeframe:
+    """One timeframe slot: its frame key, bar duration, and feature prefix."""
+
+    key: str        # key into the frames dict, e.g. "5m"
+    minutes: int    # bar duration, used to derive close times
+    prefix: str     # feature prefix, e.g. "tf5_"
+
+
+# Intraday profile: the original 5m/15m/4h stack. Limited to ~60 days of
+# history by Yahoo's intraday cap, which is one market regime.
+DEFAULT_TIMEFRAMES: tuple[Timeframe, ...] = (
+    Timeframe("5m", 5, "tf5_"),
+    Timeframe("15m", 15, "tf15_"),
+    Timeframe("4h", 240, "tf4h_"),
+)
+
+# Wide profile: hourly base with ~730 days available. Similar bar count to the
+# intraday profile but spanning many regimes, which is what makes a
+# walk-forward result mean something rather than describing one quarter.
+WIDE_TIMEFRAMES: tuple[Timeframe, ...] = (
+    Timeframe("1h", 60, "tf1h_"),
+    Timeframe("4h", 240, "tf4h_"),
+    Timeframe("1d", 1440, "tf1d_"),
+)
+
+TIMEFRAME_PROFILES = {"intraday": DEFAULT_TIMEFRAMES, "wide": WIDE_TIMEFRAMES}
+
+# Retained for callers that predate the configurable profiles.
+TIMEFRAME_MINUTES = {tf.key: tf.minutes for tf in DEFAULT_TIMEFRAMES}
+PREFIXES = {tf.key: tf.prefix for tf in DEFAULT_TIMEFRAMES}
 
 
 def build_timeframe_features(
@@ -109,35 +140,43 @@ def _close_times(index: pd.DatetimeIndex, minutes: int) -> pd.DatetimeIndex:
 
 
 def build_feature_matrix(
-    frames: dict[str, pd.DataFrame], cfg: FeatureConfig
+    frames: dict[str, pd.DataFrame],
+    cfg: FeatureConfig,
+    timeframes: tuple[Timeframe, ...] = DEFAULT_TIMEFRAMES,
 ) -> pd.DataFrame:
-    """Assemble the 5m-indexed feature matrix from all three timeframes.
+    """Assemble the base-indexed feature matrix from all timeframes.
 
-    Returns a frame indexed by 5m bar open time containing the raw 5m OHLCV
-    (needed for barrier evaluation and fills) alongside every prefixed feature.
+    The first entry of ``timeframes`` is the base; the rest are merged onto it
+    on completion time. Returns a frame indexed by base bar open time containing
+    the raw OHLCV (needed for barrier evaluation and fills) alongside every
+    prefixed feature.
     """
-    if "5m" not in frames:
-        raise ValueError("a '5m' frame is required as the base timeframe")
+    base_tf = timeframes[0]
+    if base_tf.key not in frames:
+        raise ValueError(
+            f"a '{base_tf.key}' frame is required as the base timeframe; "
+            f"got {sorted(frames)}"
+        )
 
-    base = frames["5m"].sort_index()
+    base = frames[base_tf.key].sort_index()
     matrix = base.copy()
     matrix["atr"] = ind.atr(
         base["high"], base["low"], base["close"], cfg.atr_window
     )
 
-    base_feats = build_timeframe_features(base, cfg, PREFIXES["5m"])
+    base_feats = build_timeframe_features(base, cfg, base_tf.prefix)
     matrix = matrix.join(base_feats)
 
     # Higher timeframes are joined on completion time, never on open stamp.
-    base_close = _close_times(matrix.index, TIMEFRAME_MINUTES["5m"])
+    base_close = _close_times(matrix.index, base_tf.minutes)
 
-    for tf in ("15m", "4h"):
-        if tf not in frames:
+    for tf in timeframes[1:]:
+        if tf.key not in frames:
             continue
-        htf = frames[tf].sort_index()
-        feats = build_timeframe_features(htf, cfg, PREFIXES[tf])
+        htf = frames[tf.key].sort_index()
+        feats = build_timeframe_features(htf, cfg, tf.prefix)
         feats = feats.copy()
-        feats["_available_at"] = _close_times(feats.index, TIMEFRAME_MINUTES[tf])
+        feats["_available_at"] = _close_times(feats.index, tf.minutes)
 
         left = pd.DataFrame({"_asof": base_close}).sort_values("_asof")
         right = feats.sort_values("_available_at")
@@ -168,12 +207,13 @@ def feature_columns(matrix: pd.DataFrame) -> list[str]:
     cols = [
         c
         for c in matrix.columns
-        if c.startswith(("tf5_", "tf15_", "tf4h_")) and not c.endswith("_atr")
+        if c.startswith(("tf5_", "tf15_", "tf1h_", "tf4h_", "tf1d_", "ctx_"))
+        and not c.endswith("_atr")
     ]
     return sorted(cols)
 
 
-def add_session_features(matrix: pd.DataFrame) -> pd.DataFrame:
+def add_session_features(matrix: pd.DataFrame, prefix: str = "tf5_") -> pd.DataFrame:
     """Time-of-day and session context.
 
     Nasdaq futures behave very differently at 03:00 ET than at the cash open,
@@ -183,10 +223,10 @@ def add_session_features(matrix: pd.DataFrame) -> pd.DataFrame:
     out = matrix.copy()
     et = out.index.tz_convert("America/New_York")
     minute = et.hour * 60 + et.minute
-    out["tf5_tod_sin"] = np.sin(2 * np.pi * minute / 1440.0)
-    out["tf5_tod_cos"] = np.cos(2 * np.pi * minute / 1440.0)
-    out["tf5_dow"] = et.dayofweek.astype(float)
-    out["tf5_is_rth"] = (
+    out[f"{prefix}tod_sin"] = np.sin(2 * np.pi * minute / 1440.0)
+    out[f"{prefix}tod_cos"] = np.cos(2 * np.pi * minute / 1440.0)
+    out[f"{prefix}dow"] = et.dayofweek.astype(float)
+    out[f"{prefix}is_rth"] = (
         ((et.hour > 9) | ((et.hour == 9) & (et.minute >= 30)))
         & (et.hour < 16)
         & (et.dayofweek < 5)

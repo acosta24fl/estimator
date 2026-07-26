@@ -1,0 +1,198 @@
+"""Cross-asset and regime features, prefixed ``ctx_``.
+
+Where :mod:`mnq.features.builder` asks "what is MNQ doing?", this module asks
+"what is everything else doing, and what kind of market is this?" - the two
+questions that price-derived indicators on a single instrument cannot answer.
+
+Four groups:
+
+* **Relative strength** - MNQ's return minus another asset's. Nasdaq
+  outperforming the Dow is a different market than both rising together.
+* **Rolling correlation** - not the level but the *regime*. When Nasdaq
+  decouples from bonds, the thing driving it has changed.
+* **Risk appetite** - a composite of credit, small caps, gold and the yen.
+* **Volatility regime** - VIX level and, more usefully, its percentile against
+  its own recent history. "VIX at 18" means nothing; "VIX in its 85th
+  percentile" means a great deal.
+
+The same causality rule as everywhere else applies: context bars are merged on
+their *close* time, so a context bar is invisible until it has completed.
+"""
+
+from __future__ import annotations
+
+import logging
+
+import numpy as np
+import pandas as pd
+
+from ..data.context import ContextConfig
+
+log = logging.getLogger(__name__)
+
+PREFIX = "ctx_"
+
+
+def _returns(close: pd.Series, window: int) -> pd.Series:
+    return 100.0 * (close / close.shift(window) - 1.0)
+
+
+def _percentile_rank(s: pd.Series, window: int) -> pd.Series:
+    """Where does the current value sit within its own trailing history?
+
+    Expressed 0-1. This is what makes a level interpretable across years: an
+    absolute VIX of 20 meant something different in 2017 than in 2022.
+    """
+    return s.rolling(window, min_periods=max(20, window // 10)).rank(pct=True)
+
+
+def build_context_features(
+    base_index: pd.DatetimeIndex,
+    base_close: pd.Series,
+    context: dict[str, pd.DataFrame],
+    cfg: ContextConfig,
+    base_minutes: int,
+) -> pd.DataFrame:
+    """Build the ``ctx_`` block aligned to the base timeframe.
+
+    ``base_index`` is stamped at bar open; ``base_minutes`` is the base bar's
+    duration, used to derive close times for the leak-free merge.
+    """
+    if not context:
+        return pd.DataFrame(index=base_index)
+
+    base_close_time = base_index + pd.Timedelta(minutes=base_minutes)
+    out = pd.DataFrame(index=base_index)
+
+    # MNQ's own returns, needed as the reference leg for relative strength.
+    own_returns = {w: _returns(base_close, w) for w in cfg.return_windows}
+
+    for name, frame in context.items():
+        if frame.empty or "close" not in frame:
+            continue
+
+        # Infer this symbol's bar duration to compute its close times. Falls
+        # back to the configured interval if the index is irregular.
+        deltas = frame.index.to_series().diff().dropna()
+        span = deltas.median() if len(deltas) else pd.Timedelta(minutes=60)
+        if pd.isna(span) or span <= pd.Timedelta(0):
+            span = pd.Timedelta(minutes=60)
+
+        feats = pd.DataFrame(index=frame.index)
+        close = frame["close"]
+
+        for w in cfg.return_windows:
+            feats[f"{PREFIX}{name}_ret{w}"] = _returns(close, w)
+
+        # Distance from a slow mean: cheap trend-position measure per asset.
+        ma = close.rolling(50, min_periods=25).mean()
+        sd = close.rolling(50, min_periods=25).std(ddof=0).replace(0.0, np.nan)
+        feats[f"{PREFIX}{name}_zscore"] = (close - ma) / sd
+
+        feats["_available_at"] = frame.index + span
+
+        merged = _merge_on_close(feats, base_close_time, base_index)
+        out = out.join(merged)
+
+        # Relative strength and correlation are computed after alignment so both
+        # legs sit on the same clock.
+        for w in cfg.return_windows:
+            col = f"{PREFIX}{name}_ret{w}"
+            if col in out:
+                out[f"{PREFIX}{name}_rs{w}"] = own_returns[w] - out[col]
+
+        ret1_col = f"{PREFIX}{name}_ret1"
+        if ret1_col in out:
+            own1 = own_returns[cfg.return_windows[0]]
+            out[f"{PREFIX}{name}_corr"] = (
+                own1.rolling(cfg.correlation_window, min_periods=cfg.correlation_window // 2)
+                .corr(out[ret1_col])
+            )
+
+    _add_volatility_regime(out, cfg)
+    _add_risk_appetite(out, cfg)
+    return out
+
+
+def _merge_on_close(
+    feats: pd.DataFrame, base_close_time: pd.DatetimeIndex, base_index: pd.DatetimeIndex
+) -> pd.DataFrame:
+    """Attach context features to base bars using completion times only."""
+    left = pd.DataFrame({"_asof": base_close_time}).sort_values("_asof")
+    right = feats.sort_values("_available_at")
+    merged = pd.merge_asof(
+        left, right,
+        left_on="_asof", right_on="_available_at",
+        direction="backward", allow_exact_matches=True,
+    )
+    merged.index = base_index
+    return merged.drop(columns=["_asof", "_available_at"])
+
+
+def _add_volatility_regime(out: pd.DataFrame, cfg: ContextConfig) -> None:
+    """VIX level, percentile and direction.
+
+    The percentile is the feature that actually generalises - it is comparable
+    across years in a way the raw level is not.
+    """
+    level_col = f"{PREFIX}vix_zscore"
+    ret_col = f"{PREFIX}vix_ret{cfg.return_windows[0]}"
+    if level_col not in out:
+        return
+
+    # Reconstruct an approximate level series from the z-score for ranking;
+    # ranking is monotonic so the z-score ranks identically to the level.
+    out[f"{PREFIX}vix_percentile"] = _percentile_rank(
+        out[level_col], cfg.vix_percentile_window
+    )
+    if ret_col in out:
+        # A volatility spike is a regime change; a drift is not.
+        out[f"{PREFIX}vix_spike"] = (out[ret_col] > 5.0).astype(float)
+
+
+def _add_risk_appetite(out: pd.DataFrame, cfg: ContextConfig) -> None:
+    """Composite risk-on/risk-off score.
+
+    Averages the signals that tend to move together when the market's appetite
+    for risk shifts: credit and small caps rise risk-on; gold and the yen rise
+    risk-off. Averaging is deliberate - any single leg is noisy, and the
+    agreement between them is the informative part.
+    """
+    w = cfg.return_windows[min(1, len(cfg.return_windows) - 1)]
+    risk_on = [f"{PREFIX}hyg_ret{w}", f"{PREFIX}rty_ret{w}", f"{PREFIX}sox_ret{w}"]
+    risk_off = [f"{PREFIX}gc_ret{w}", f"{PREFIX}jpy_ret{w}", f"{PREFIX}zn_ret{w}"]
+
+    on = [c for c in risk_on if c in out]
+    off = [c for c in risk_off if c in out]
+    if not on and not off:
+        return
+
+    # Standardise each leg before combining; otherwise the most volatile asset
+    # silently dominates the composite.
+    def _standardise(cols: list[str]) -> pd.Series | None:
+        if not cols:
+            return None
+        block = out[cols]
+        z = (block - block.rolling(200, min_periods=50).mean()) / block.rolling(
+            200, min_periods=50
+        ).std(ddof=0).replace(0.0, np.nan)
+        return z.mean(axis=1)
+
+    on_z, off_z = _standardise(on), _standardise(off)
+    if on_z is not None and off_z is not None:
+        out[f"{PREFIX}risk_appetite"] = on_z - off_z
+    elif on_z is not None:
+        out[f"{PREFIX}risk_appetite"] = on_z
+    else:
+        out[f"{PREFIX}risk_appetite"] = -off_z
+
+    # Breadth: equal-weight versus cap-weight. When RSP lags badly, a handful of
+    # mega-caps are carrying the index - a notoriously fragile configuration for
+    # a Nasdaq-heavy contract.
+    rsp, es = f"{PREFIX}rsp_ret{w}", f"{PREFIX}es_ret{w}"
+    if rsp in out and es in out:
+        out[f"{PREFIX}breadth_divergence"] = out[rsp] - out[es]
+
+
+def context_feature_columns(matrix: pd.DataFrame) -> list[str]:
+    return sorted(c for c in matrix.columns if c.startswith(PREFIX))

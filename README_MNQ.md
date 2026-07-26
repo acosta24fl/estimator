@@ -10,20 +10,35 @@ monitoring open positions minute by minute.
 
 ## Read this before anything else
 
-**No real-market backtest has been run yet, so this system has no demonstrated
-edge.** The environment this was built in blocks Yahoo Finance at the network
-policy layer (403 on `query1.finance.yahoo.com`, `query2.finance.yahoo.com` and
-`fc.yahoo.com`), so no MNQ history could be downloaded here. Every component is
-built, wired and tested, but the one question that matters — *does this predict
-MNQ?* — is answered by running `fetch` then `train` on your own machine, where
-Yahoo is reachable.
+**This system has no demonstrated edge.** The first real-data run — 5m bars over
+60 days, MNQ price features only — returned **AUC 0.4981 long / 0.5075 short**:
+a coin flip. That configuration is not tradeable, and no amount of threshold
+tuning fixes a 0.50 AUC, because there is nothing there to amplify.
 
-What has been verified is the machinery: 78 tests pass, including the lookahead
-tests that decide whether any performance number can be believed at all. On
-synthetic random-walk data the models score AUC ≈ 0.50 and the strategy loses
-money after costs. **That is the correct and expected result** — it is a control
-showing that nothing is leaking future information. A pipeline that "worked" on
-random data would be broken.
+Two changes have since been built to test whether that verdict is about *the
+market* or about *the sample*: a wide (1h / 730-day) profile spanning many
+regimes instead of one, and cross-asset context features. **Neither has been run
+on real data yet.** `python -m mnq.cli experiment` runs the comparison.
+
+The environment this was built in blocks Yahoo Finance at the network policy
+layer (403 on `query1.finance.yahoo.com`, `query2.finance.yahoo.com` and
+`fc.yahoo.com`), so nothing here has been validated against real bars.
+
+What has been verified is the machinery: 92 tests pass, including the lookahead
+tests that decide whether any performance number can be believed at all.
+
+Two synthetic controls bracket the pipeline's behaviour, and together they are
+worth more than either alone:
+
+- On a **random walk**, the models score AUC ≈ 0.50 and lose money after costs.
+  Nothing is leaking future information — a pipeline that "worked" here would be
+  broken.
+- On synthetic data with **deliberately planted structure**, the same pipeline
+  recovers AUC ≈ 0.57.
+
+So the pipeline can find edge when edge exists. That makes the real-data 0.4981
+more meaningful than it first looks: the problem is not that the machinery
+cannot detect a signal, it is that there was no signal in that sample.
 
 Two possible outcomes when you run it on real bars, and you should be prepared
 for either:
@@ -64,12 +79,54 @@ Secrets are read from the environment only, never from the YAML config, so
 ## Getting to a verdict
 
 ```bash
-python -m mnq.cli fetch      # download and cache MNQ bars
-python -m mnq.cli train      # purged walk-forward evaluation, then final models
-python -m mnq.cli backtest   # price those out-of-sample predictions
-python -m mnq.cli sweep      # search entry gates and management rules
-python -m mnq.cli discover   # mine the feature space for new patterns
+python -m mnq.cli fetch        # MNQ bars + the cross-asset basket
+python -m mnq.cli experiment   # the decisive test: 4 configurations, one table
+python -m mnq.cli train        # purged walk-forward evaluation, then final models
+python -m mnq.cli backtest     # price those out-of-sample predictions
+python -m mnq.cli sweep        # search entry gates and management rules
+python -m mnq.cli discover     # mine the feature space for new patterns
 ```
+
+**Start with `experiment`.** It runs the two-by-two that separates the two
+variables that matter, so neither can be confused with the other:
+
+|  | price only | + cross-asset |
+| --- | --- | --- |
+| **intraday** 5m, ~60 days | one regime, arbitraged inputs | one regime, better inputs |
+| **wide** 1h, ~730 days | many regimes, arbitraged inputs | many regimes, better inputs |
+
+### Why the wide profile exists
+
+Yahoo caps intraday history at ~60 days. That is **one market regime** — and it
+shows: a real run on 5m/60d produced base rates of 27.2% long against 35.8%
+short, which is a falling market, not a property of the strategy. Nothing
+validated on a single regime generalises, and worse, sweeping on it will happily
+"discover" a short bias that is really just those two months.
+
+The wide profile uses 1h bars over ~730 days. That is a similar *bar count* but
+spans many regimes, which is what makes a walk-forward result mean something.
+Hourly ATR also runs ~100 points, so 2×ATR targets land naturally inside the
+20–250 point range.
+
+### Why cross-asset context exists
+
+EMAs, RSI and MACD on MNQ are the most widely computed numbers in markets. The
+relationship between Nasdaq and bonds, the dollar, credit and volatility is not.
+The basket (`mnq/data/context.py`) pulls from the same free Yahoo endpoint — no
+new account, key, or rate limit:
+
+| Group | Symbols | What it carries |
+| --- | --- | --- |
+| Index complex | ES, YM, RTY | rotation and relative strength |
+| Rates | ZN | the core risk-off bid |
+| Commodities / FX | GC, CL, 6E, 6J | inflation impulse, carry unwind |
+| Risk appetite | HYG, VIX | credit stress, volatility regime |
+| Leadership / breadth | SOXX, RSP | semis lead Nasdaq; equal-weight is a free breadth proxy |
+
+From these come relative strength, rolling correlations (the *regime*, not the
+level), a risk-appetite composite, VIX percentile, and a breadth divergence —
+about 94 `ctx_` features. Individual symbols are allowed to fail; a partial
+basket still works, and `fetch` prints exactly what loaded.
 
 `train` prints the number that matters first:
 

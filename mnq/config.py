@@ -11,12 +11,22 @@ import dataclasses
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACT_DIR = REPO_ROOT / "artifacts"
+
+if TYPE_CHECKING:
+    from .data.context import ContextConfig
+
+
+def _default_context():
+    """Imported lazily: mnq.data.context imports from this module."""
+    from .data.context import ContextConfig
+
+    return ContextConfig()
 
 # MNQ contract specification (CME Micro E-mini Nasdaq-100).
 POINT_VALUE_USD = 2.0
@@ -26,6 +36,11 @@ TICK_SIZE = 0.25
 @dataclass
 class DataConfig:
     symbol: str = "MNQ=F"
+    # "intraday" = 5m/15m/4h over ~60 days (one regime, fast signals).
+    # "wide"     = 1h/4h/1d over ~730 days (many regimes, slower signals).
+    # Use "wide" to find out whether an approach generalises at all; a result
+    # from 60 days of 5m bars describes one quarter, not the market.
+    profile: str = "intraday"
     # Yahoo caps intraday history by interval: 60d for <1h bars, 730d for 1h.
     base_interval: str = "5m"
     base_lookback: str = "60d"
@@ -34,11 +49,30 @@ class DataConfig:
     high_interval: str = "1h"  # resampled up to 4h locally
     high_lookback: str = "730d"
     high_resample: str = "4h"
+    # Wide-profile intervals. Yahoo serves ~730 days of hourly and years of
+    # daily, so this profile is not constrained the way intraday is.
+    wide_base_interval: str = "1h"
+    wide_base_lookback: str = "730d"
+    wide_mid_resample: str = "4h"
+    wide_high_interval: str = "1d"
+    wide_high_lookback: str = "5y"
+
     cache_dir: str = "artifacts/data"
     # Yahoo 5m bars are stamped in exchange time; everything is normalised to UTC.
     tz: str = "UTC"
     # Drop bars outside CME's Globex session (23h/day, closed 17:00-18:00 ET).
     drop_maintenance_break: bool = True
+
+    def timeframes(self):
+        """The Timeframe specs for the configured profile."""
+        from .features.builder import TIMEFRAME_PROFILES
+
+        if self.profile not in TIMEFRAME_PROFILES:
+            raise ValueError(
+                f"unknown data profile {self.profile!r}; "
+                f"expected one of {sorted(TIMEFRAME_PROFILES)}"
+            )
+        return TIMEFRAME_PROFILES[self.profile]
 
 
 @dataclass
@@ -183,6 +217,7 @@ class ServerConfig:
 @dataclass
 class Config:
     data: DataConfig = field(default_factory=DataConfig)
+    context: "ContextConfig" = field(default_factory=lambda: _default_context())
     features: FeatureConfig = field(default_factory=FeatureConfig)
     labels: LabelConfig = field(default_factory=LabelConfig)
     model: ModelConfig = field(default_factory=ModelConfig)

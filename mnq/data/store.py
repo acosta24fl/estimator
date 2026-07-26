@@ -125,8 +125,14 @@ class BarStore:
             df = df[df.index < current]
         return df
 
-    def frames(self) -> dict[str, pd.DataFrame]:
-        """The 5m/15m/4h views the feature builder consumes.
+    # Resampling rules per timeframe key, matching mnq.features.builder.
+    RESAMPLE_RULES = {
+        "5m": ("5min", 5), "15m": ("15min", 15), "1h": ("1h", 60),
+        "4h": ("4h", 240), "1d": ("1D", 1440),
+    }
+
+    def frames(self, keys: tuple[str, ...] = ("5m", "15m", "4h")) -> dict[str, pd.DataFrame]:
+        """The resampled views the feature builder consumes.
 
         Trailing partial buckets are dropped: a 4h bar stamped 12:00 is only
         complete at 16:00, and including it early would feed the model a
@@ -134,11 +140,14 @@ class BarStore:
         """
         minutes = self.minute_frame()
         if minutes.empty:
-            return {"5m": minutes, "15m": minutes, "4h": minutes}
+            return {k: minutes for k in keys}
 
         now = datetime.now(timezone.utc)
         out: dict[str, pd.DataFrame] = {}
-        for key, rule, span in (("5m", "5min", 5), ("15m", "15min", 15), ("4h", "4h", 240)):
+        for key in keys:
+            if key not in self.RESAMPLE_RULES:
+                raise ValueError(f"unknown timeframe key {key!r}")
+            rule, span = self.RESAMPLE_RULES[key]
             res = resample_ohlcv(minutes, rule)
             if len(res):
                 complete_before = now - timedelta(minutes=span)

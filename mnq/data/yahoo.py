@@ -146,11 +146,19 @@ def fetch_all(cfg: Config, use_cache: bool = True, refresh: bool = True) -> dict
     root = cfg.path(d.cache_dir)
     root.mkdir(parents=True, exist_ok=True)
 
-    requests = [
-        ("5m", d.base_interval, d.base_lookback),
-        ("15m", d.mid_interval, d.mid_lookback),
-        ("1h", d.high_interval, d.high_lookback),
-    ]
+    if d.profile == "wide":
+        # Hourly base plus daily context. The 4h slot is resampled from the
+        # hourly pull rather than requested, so this costs two requests.
+        requests = [
+            ("1h", d.wide_base_interval, d.wide_base_lookback),
+            ("1d", d.wide_high_interval, d.wide_high_lookback),
+        ]
+    else:
+        requests = [
+            ("5m", d.base_interval, d.base_lookback),
+            ("15m", d.mid_interval, d.mid_lookback),
+            ("1h", d.high_interval, d.high_lookback),
+        ]
 
     frames: dict[str, pd.DataFrame] = {}
     for key, interval, lookback in requests:
@@ -172,9 +180,17 @@ def fetch_all(cfg: Config, use_cache: bool = True, refresh: bool = True) -> dict
             merged = cached
         frames[key] = merged
 
-    frames["4h"] = resample_ohlcv(frames.pop("1h"), d.high_resample)
+    if d.profile == "wide":
+        # Keep 1h as the base and derive 4h from it.
+        frames["4h"] = resample_ohlcv(frames["1h"], d.wide_mid_resample)
+    else:
+        frames["4h"] = resample_ohlcv(frames.pop("1h"), d.high_resample)
 
     if d.drop_maintenance_break:
-        frames = {k: drop_maintenance(v) for k, v in frames.items()}
+        # Daily bars have no intraday session to trim, and filtering them by
+        # hour-of-day would silently delete the entire series.
+        frames = {
+            k: (v if k == "1d" else drop_maintenance(v)) for k, v in frames.items()
+        }
 
     return frames

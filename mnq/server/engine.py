@@ -171,12 +171,15 @@ class LiveEngine:
         return scored["p_long"] if direction == LONG else scored["p_short"]
 
     def _current_atr(self) -> float | None:
-        frames = self.store.frames()
-        if frames["5m"].empty or len(frames["5m"]) < self.cfg.features.atr_window + 2:
+        base_key = self.cfg.data.timeframes()[0].key
+        frames = self.store.frames((base_key,))
+        if base_key not in frames or frames[base_key].empty:
+            return None
+        if len(frames[base_key]) < self.cfg.features.atr_window + 2:
             return None
         from .. import indicators as ind
 
-        f = frames["5m"]
+        f = frames[base_key]
         series = ind.atr(f["high"], f["low"], f["close"], self.cfg.features.atr_window)
         value = series.iloc[-1]
         return float(value) if pd.notna(value) else None
@@ -185,11 +188,13 @@ class LiveEngine:
 
     def build_matrix(self) -> pd.DataFrame | None:
         """Feature matrix from live bars, or ``None`` if history is too short."""
-        frames = self.store.frames()
-        if frames["5m"].empty or len(frames["5m"]) < 60:
+        timeframes = self.cfg.data.timeframes()
+        base_key = timeframes[0].key
+        frames = self.store.frames(tuple(tf.key for tf in timeframes))
+        if base_key not in frames or frames[base_key].empty or len(frames[base_key]) < 60:
             return None
-        matrix = build_feature_matrix(frames, self.cfg.features)
-        return add_session_features(matrix)
+        matrix = build_feature_matrix(frames, self.cfg.features, timeframes)
+        return add_session_features(matrix, timeframes[0].prefix)
 
     def score_latest(self) -> dict[str, Any] | None:
         """Score the most recent completed 5m bar for both directions."""

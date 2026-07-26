@@ -37,33 +37,118 @@ def _setup_logging(verbose: bool) -> None:
     logging.getLogger("yfinance").setLevel(logging.WARNING)
 
 
-def _load_frames(args, cfg: Config) -> dict[str, pd.DataFrame]:
-    """Real Yahoo bars, or synthetic ones when asked."""
+def _apply_profile(args, cfg: Config) -> None:
+    """Let --profile override the configured timeframe stack."""
+    profile = getattr(args, "profile", None)
+    if profile:
+        cfg.data.profile = profile
+    if cfg.data.profile == "wide":
+        # An hourly base needs an hourly-scale horizon: 24 five-minute bars is
+        # two hours, but 24 hourly bars is a day and a half.
+        if getattr(args, "horizon", None) is None:
+            cfg.labels.horizon_bars = 12
+            cfg.labels.fwd_return_bars = 6
+            cfg.model.embargo_bars = 18
+    if getattr(args, "horizon", None):
+        cfg.labels.horizon_bars = args.horizon
+        cfg.model.embargo_bars = int(args.horizon * 1.5)
+    if getattr(args, "no_context", False):
+        cfg.context.enabled = False
+
+
+def _load_frames(
+    args, cfg: Config
+) -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+    """Return ``(price_frames, context_frames)``.
+
+    Context is empty when disabled or unavailable; the pipeline degrades to
+    price-only features rather than failing.
+    """
+    _apply_profile(args, cfg)
+
     if args.synthetic:
-        from .data.synthetic import generate_frames
+        from .data.synthetic import generate_context, generate_frames, generate_minute_bars
 
         days = getattr(args, "synthetic_days", 200)
         logging.warning(
             "using SYNTHETIC data (%d days) — results validate the pipeline, "
             "not the strategy", days,
         )
-        return generate_frames(n_minutes=60 * 24 * days, seed=args.seed)
+        minutes = generate_minute_bars(n_minutes=60 * 24 * days, seed=args.seed)
+        from .data.yahoo import resample_ohlcv
+
+        if cfg.data.profile == "wide":
+            frames = {
+                "1h": resample_ohlcv(minutes, "1h"),
+                "4h": resample_ohlcv(minutes, "4h"),
+                "1d": resample_ohlcv(minutes, "1D"),
+            }
+            ctx_interval = "1h"
+        else:
+            frames = {
+                "5m": resample_ohlcv(minutes, "5min"),
+                "15m": resample_ohlcv(minutes, "15min"),
+                "4h": resample_ohlcv(minutes, "4h"),
+            }
+            ctx_interval = "15min"
+        context = (
+            generate_context(minutes, interval=ctx_interval, seed=args.seed + 1)
+            if cfg.context.enabled
+            else {}
+        )
+        return frames, context
 
     from .data.yahoo import fetch_all
 
-    return fetch_all(cfg, use_cache=True, refresh=not args.no_refresh)
+    frames = fetch_all(cfg, use_cache=True, refresh=not args.no_refresh)
+
+    context: dict[str, pd.DataFrame] = {}
+    if cfg.context.enabled:
+        from .data.context import fetch_context
+
+        # Context is pulled hourly and, for the intraday profile, left hourly:
+        # a slower context bar is not a problem, and it keeps the request count
+        # (and Yahoo's patience) low.
+        try:
+            context = fetch_context(
+                cfg.context,
+                cfg.path(cfg.context.cache_dir),
+                cfg.data.tz,
+                refresh=not args.no_refresh,
+            )
+        except Exception as exc:  # noqa: BLE001 - price-only is still a valid run
+            logging.warning("context unavailable (%s); continuing price-only", exc)
+
+    return frames, context
 
 
 # ---------------------------------------------------------------- commands
 
 
 def cmd_fetch(args, cfg: Config) -> int:
+    """Download MNQ bars and, unless disabled, the cross-asset basket."""
     from .data.yahoo import fetch_all
 
+    _apply_profile(args, cfg)
+
     frames = fetch_all(cfg, use_cache=True, refresh=True)
-    print(f"\nCached under {cfg.path(cfg.data.cache_dir)}")
+    print(f"\nMNQ bars cached under {cfg.path(cfg.data.cache_dir)}")
     for name, df in frames.items():
         print(f"  {name:>4}: {len(df):>7,} bars   {df.index.min()} .. {df.index.max()}")
+
+    if cfg.context.enabled:
+        from .data.context import describe_batch_result, fetch_context
+
+        print(f"\n{'-'*70}\nCross-asset context (free, same Yahoo source)\n{'-'*70}")
+        try:
+            context = fetch_context(
+                cfg.context, cfg.path(cfg.context.cache_dir), cfg.data.tz, refresh=True
+            )
+            print(describe_batch_result(cfg.context, context))
+        except Exception as exc:  # noqa: BLE001 - price-only is still usable
+            print(f"  context unavailable: {exc}")
+            print("  Training will fall back to price-only features.")
+
     return 0
 
 
@@ -72,8 +157,8 @@ def cmd_train(args, cfg: Config) -> int:
         prepare, save_bundle, summarise_labels, train_final, walk_forward_evaluate,
     )
 
-    frames = _load_frames(args, cfg)
-    data = prepare(frames, cfg)
+    frames, context = _load_frames(args, cfg)
+    data = prepare(frames, cfg, context)
 
     print("\n--- label balance ---")
     print(json.dumps(summarise_labels(data), indent=2, default=float))
@@ -109,8 +194,8 @@ def _predictions_for_backtest(args, cfg: Config):
     """Reuse cached walk-forward predictions when they exist, else regenerate."""
     from .models.train import prepare, walk_forward_evaluate
 
-    frames = _load_frames(args, cfg)
-    data = prepare(frames, cfg)
+    frames, context = _load_frames(args, cfg)
+    data = prepare(frames, cfg, context)
 
     cached = ARTIFACT_DIR / "wf_predictions.csv"
     if cached.exists() and not args.retrain:
@@ -146,7 +231,7 @@ def cmd_sweep(args, cfg: Config) -> int:
     from .backtest.sweep import sweep_barrier_geometry, sweep_decision_params
 
     if args.barriers:
-        frames = _load_frames(args, cfg)
+        frames, _ = _load_frames(args, cfg)
         print("Barrier sweep (retrains per combination; this is slow)...")
         df = sweep_barrier_geometry(frames, cfg)
         out = ARTIFACT_DIR / "sweep_barriers.csv"
@@ -176,8 +261,8 @@ def cmd_discover(args, cfg: Config) -> int:
     from .backtest.sweep import discover_patterns, validate_patterns
     from .models.train import prepare
 
-    frames = _load_frames(args, cfg)
-    data = prepare(frames, cfg)
+    frames, context = _load_frames(args, cfg)
+    data = prepare(frames, cfg, context)
 
     pd.set_option("display.width", 250)
     pd.set_option("display.max_colwidth", 80)
@@ -208,6 +293,97 @@ def cmd_discover(args, cfg: Config) -> int:
         val.to_csv(ARTIFACT_DIR / f"patterns_{name.lower()}.csv", index=False)
 
     print(f"\nSaved to {ARTIFACT_DIR}/patterns_*.csv")
+    return 0
+
+
+def cmd_experiment(args, cfg: Config) -> int:
+    """Run the decisive comparison: timeframe profile x cross-asset context.
+
+    Four configurations, one table. This answers two questions at once - does a
+    regime-diverse sample change the verdict, and do cross-asset features add
+    anything - without letting either be confounded with the other.
+    """
+    from argparse import Namespace
+
+    from .models.train import prepare, walk_forward_evaluate
+
+    combos = [
+        ("intraday", False, "5m/60d, price only  (your original run)"),
+        ("intraday", True, "5m/60d, + cross-asset"),
+        ("wide", False, "1h/730d, price only"),
+        ("wide", True, "1h/730d, + cross-asset"),
+    ]
+    if args.wide_only:
+        combos = [c for c in combos if c[0] == "wide"]
+
+    rows = []
+    for profile, use_ctx, label in combos:
+        print(f"\n{'='*72}\n  {label}\n{'='*72}")
+        trial = Config.load(args.config)
+        trial.data.profile = profile
+        trial.context.enabled = use_ctx
+
+        trial_args = Namespace(**{**vars(args), "profile": profile,
+                                  "no_context": not use_ctx, "horizon": args.horizon})
+        try:
+            frames, context = _load_frames(trial_args, trial)
+            data = prepare(frames, trial, context)
+            _, metrics = walk_forward_evaluate(data, trial)
+        except Exception as exc:  # noqa: BLE001 - one combo failing is informative
+            logging.error("configuration failed: %s", exc)
+            rows.append({"config": label, "long_auc": None, "short_auc": None,
+                         "bars": 0, "features": 0, "note": str(exc)[:60]})
+            continue
+
+        rows.append(
+            {
+                "config": label,
+                "long_auc": metrics.get("long_oos_auc"),
+                "short_auc": metrics.get("short_oos_auc"),
+                "bars": metrics.get("long_oos_n", 0),
+                "features": len(data.feature_names),
+                "note": "",
+            }
+        )
+
+    print(f"\n\n{'='*78}\n  RESULTS\n{'='*78}\n")
+    df = pd.DataFrame(rows)
+    pd.set_option("display.width", 200)
+    print(df.to_string(index=False))
+    df.to_csv(ARTIFACT_DIR / "experiment_results.csv", index=False)
+
+    best = max(
+        (r for r in rows if r["long_auc"] is not None),
+        key=lambda r: max(r["long_auc"], r["short_auc"]),
+        default=None,
+    )
+    print("\n" + "-" * 78)
+    if best is None:
+        print("Every configuration failed. Check the errors above.")
+        return 1
+
+    peak = max(best["long_auc"], best["short_auc"])
+    print(f"Best: {best['config']}  (AUC {peak:.4f})")
+    if peak < 0.52:
+        print(
+            "\nVERDICT: no edge in any configuration.\n"
+            "  Nothing here is tradeable. Do NOT sweep or tune - with this many\n"
+            "  configurations something will always look good by chance.\n"
+            "  The honest conclusion is that these inputs do not predict MNQ."
+        )
+    elif peak < 0.55:
+        print(
+            "\nVERDICT: marginal.\n"
+            "  Worth a backtest to see whether it survives costs, but expect\n"
+            "  most of it to be eaten. Do not trade on this alone."
+        )
+    else:
+        print(
+            "\nVERDICT: worth pursuing.\n"
+            "  Run:  python -m mnq.cli backtest --profile <the winning profile>\n"
+            "  Require positive results in BOTH sample halves before believing it."
+        )
+    print("-" * 78)
     return 0
 
 
@@ -316,8 +492,16 @@ def build_parser() -> argparse.ArgumentParser:
         sp.add_argument("--seed", type=int, default=5)
         sp.add_argument("--no-refresh", action="store_true",
                         help="use only cached bars; do not call Yahoo")
+        sp.add_argument("--profile", choices=["intraday", "wide"], default=None,
+                        help="intraday = 5m/15m/4h over ~60 days (one regime); "
+                             "wide = 1h/4h/1d over ~730 days (many regimes)")
+        sp.add_argument("--horizon", type=int, default=None,
+                        help="label horizon in base bars (overrides the profile default)")
+        sp.add_argument("--no-context", action="store_true",
+                        help="skip cross-asset features; price-only")
 
-    sp = sub.add_parser("fetch", help="download and cache Yahoo bars")
+    sp = sub.add_parser("fetch", help="download and cache Yahoo bars + context")
+    add_data_args(sp)
     sp.set_defaults(func=cmd_fetch)
 
     sp = sub.add_parser("train", help="walk-forward evaluate and fit final models")
@@ -346,6 +530,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--min-samples", type=int, default=150)
     sp.set_defaults(func=cmd_discover)
 
+    sp = sub.add_parser(
+        "experiment",
+        help="compare timeframe profiles x cross-asset context (the decisive test)",
+    )
+    add_data_args(sp)
+    sp.add_argument("--wide-only", action="store_true",
+                    help="skip the 60-day intraday configurations")
+    sp.set_defaults(func=cmd_experiment)
+
     sp = sub.add_parser("serve", help="run the webhook and signal loop")
     sp.add_argument("--seed-yahoo", action="store_true",
                     help="preload 7 days of 1m Yahoo bars so signals start immediately")
@@ -370,6 +563,14 @@ def main(argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("\ninterrupted")
         return 130
+    except (RuntimeError, FileNotFoundError, ValueError) as exc:
+        # These are the expected operational failures - no data, no model, bad
+        # config. A stack trace helps nobody; the message already says what to
+        # do. Use -v to see the trace when actually debugging.
+        print(f"\nERROR: {exc}\n", file=sys.stderr)
+        if args.verbose:
+            raise
+        return 1
 
 
 if __name__ == "__main__":
