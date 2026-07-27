@@ -45,29 +45,55 @@ echo   Setting up (first run, or the requirements changed).
 echo   This takes a few minutes once, then never again.
 echo.
 
-if not exist "%VPY%" (
-    set "PYCMD="
-    py --version >nul 2>&1 && set "PYCMD=py"
-    if not defined PYCMD python --version >nul 2>&1 && set "PYCMD=python"
-    if not defined PYCMD (
-        echo   [X] Python is not installed, or was installed without
-        echo       "Add python.exe to PATH" ticked.
-        echo.
-        echo       Install it from https://www.python.org/downloads/
-        echo       and TICK "Add python.exe to PATH" on the first screen.
-        echo.
-        pause
-        exit /b 1
-    )
-    echo   Creating the Python environment...
-    %PYCMD% -m venv "%VENV%"
-    if errorlevel 1 (
-        echo   [X] Could not create the environment.
-        pause
-        exit /b 1
-    )
-)
+REM  NOTE: the Python detection below deliberately uses labels rather than
+REM  an if ( ... ) block. Inside a parenthesised block cmd.exe expands every
+REM  %VAR% once, when it parses the whole block - so a variable set inside
+REM  the block still reads as its old (here: empty) value further down it.
+REM  That silently turned "%PYCMD% -m venv" into "-m venv". Keep it flat.
 
+if exist "%VPY%" goto :have_venv
+
+set "PYCMD="
+py --version >nul 2>&1
+if not errorlevel 1 set "PYCMD=py"
+if defined PYCMD goto :got_python
+
+python --version >nul 2>&1
+if not errorlevel 1 set "PYCMD=python"
+if defined PYCMD goto :got_python
+
+python3 --version >nul 2>&1
+if not errorlevel 1 set "PYCMD=python3"
+if defined PYCMD goto :got_python
+
+echo   [X] Python is not installed, or was installed without
+echo       "Add python.exe to PATH" ticked.
+echo.
+echo       Install it from https://www.python.org/downloads/
+echo       and TICK "Add python.exe to PATH" on the first screen.
+echo.
+pause
+exit /b 1
+
+:got_python
+echo   Creating the Python environment...
+%PYCMD% -m venv "%VENV%"
+if errorlevel 1 goto :venv_failed
+if not exist "%VPY%" goto :venv_failed
+goto :have_venv
+
+:venv_failed
+echo.
+echo   [X] Could not create the environment using "%PYCMD%".
+echo.
+echo       If you installed Python from the Microsoft Store, install it
+echo       from https://www.python.org/downloads/ instead - the Store
+echo       build cannot always create virtual environments.
+echo.
+pause
+exit /b 1
+
+:have_venv
 echo   Installing packages...
 "%VPY%" -m pip install --upgrade pip --quiet
 "%VPY%" -m pip install -r requirements.txt
