@@ -47,7 +47,7 @@ So the constraint really was sample size. Training now
 **What remains unproven is profit.** AUC 0.578 is a small edge, and small
 edges die to costs. Read the PROFITABILITY block, not the backtest total.
 
-What has been verified is the machinery: 270 tests pass, including the lookahead
+What has been verified is the machinery: 292 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -346,6 +346,54 @@ result look real.
 
 ---
 
+## Dashboard
+
+```bash
+python -m mnq.cli dashboard --open      # or MNQ.bat -> option 7
+```
+
+Serves a page on `http://localhost:8000` showing the candle chart with EMA
+overlays, the model's direction and expected move in points, realised trend
+over several windows, the ATR target and stop levels, live indicator values,
+and engine state. It refreshes every 15 seconds.
+
+Everything is served from the same process — no CDN, no external scripts, no
+API keys — so it works offline and nothing about what you are watching leaves
+the machine. The chart is drawn directly to a canvas; there is no charting
+library to break.
+
+The overlays are *read back from the feature matrix* rather than recomputed.
+A dashboard that calculated its own EMAs would eventually disagree with the
+model, and the disagreement would be silent.
+
+### How "by how many points" is calculated
+
+Not from the regressor. `SharedRegressor` minimises squared error on forward
+percent return, and financial returns are mostly noise, so the loss-minimising
+prediction is heavily shrunk toward zero — a genuinely informative model still
+outputs tiny numbers, because predicting the true magnitude is punished on the
+many occasions the move does not arrive. Reporting that as "expected points"
+would understate every tradeable move, by construction.
+
+Instead the projection is **empirically calibrated**. Out-of-sample
+walk-forward predictions are bucketed by model confidence, and the realised
+move after each bucket is measured:
+
+| Side | Confidence | n | Hit rate | 25th | Median | 75th |
+| --- | --- | --- | --- | --- | --- | --- |
+| long | 0.55–0.60 | 118 | 69.5% | −6 | +15 | +34 |
+| long | 0.60–0.65 | 123 | 53.7% | −21 | +4 | +26 |
+
+A live score is matched to its bucket and reported with that bucket's median
+*and its interquartile range*. When the 25th percentile is negative, the page
+says so — "the middle half ran −21 to +26 points, so the range still spans a
+losing outcome" — rather than drawing a confident arrow over an uncertain call.
+
+Below the entry gate the projection reads FLAT and states why, so the direction
+is never mistaken for a trade signal.
+
+---
+
 ## Going live
 
 ```bash
@@ -548,7 +596,7 @@ mnq/
   config.py            all tunables; secrets from env only
   indicators.py        EMA, ATR, RSI, MACD, ADX, Bollinger, slope, momentum
   labeling.py          triple-barrier labels + forward-return target
-  cli.py               fetch / ingest / train / backtest / sweep / serve
+  cli.py               fetch / ingest / train / backtest / sweep / dashboard
   data/
     yahoo.py           Yahoo loader with a merging cache
     store.py           live 1m bar store with resampling
@@ -570,10 +618,13 @@ mnq/
     manager.py         stops, targets, trailing, early exit (shared live/backtest)
     signals.py         entry/stop/target construction and gating
   notify/telegram.py   message formatting and delivery
+  models/projection.py calibrated direction + expected move in points
   server/
     engine.py          live signal generation and monitoring
-    app.py             FastAPI webhook + 10-minute scheduler
-tests/                 270 tests
+    app.py             FastAPI webhook + 10-minute scheduler + dashboard API
+    dashboard.py       snapshot payloads for the local page
+    static/dashboard.html  self-contained page, canvas chart, no CDN
+tests/                 292 tests
 ```
 
 ## Tests

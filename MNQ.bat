@@ -126,8 +126,9 @@ echo   3  Train + backtest         (pooled 4-instrument - the main path)
 echo   4  Validate a result        (permutation test - is it real?)
 echo   5  Cross-instrument test    (train on ES/YM/RTY, predict MNQ)
 echo   6  Ingest purchased history  (real vendor data - the big one)
-echo   7  Show status
-echo   8  Run the tests
+echo   7  Open the dashboard      (live chart + projection in a browser)
+echo   8  Show status
+echo   9  Run the tests
 echo.
 echo   0  Exit
 echo.
@@ -139,8 +140,9 @@ if "%CHOICE%"=="3" goto :do_backtest
 if "%CHOICE%"=="4" goto :do_validate
 if "%CHOICE%"=="5" goto :do_crossval
 if "%CHOICE%"=="6" goto :do_ingest
-if "%CHOICE%"=="7" goto :do_status
-if "%CHOICE%"=="8" goto :do_tests
+if "%CHOICE%"=="7" goto :do_dashboard
+if "%CHOICE%"=="8" goto :do_status
+if "%CHOICE%"=="9" goto :do_tests
 if "%CHOICE%"=="0" exit /b 0
 echo   Not a valid choice.
 goto :menu
@@ -192,8 +194,8 @@ goto :done
 :do_validate
 echo.
 set "THRESH="
-set /p THRESH=  Entry threshold to test [press Enter for 0.62]:
-if "%THRESH%"=="" set "THRESH=0.62"
+set /p THRESH=  Entry threshold to test [press Enter for 0.58]:
+if "%THRESH%"=="" set "THRESH=0.58"
 echo.
 echo   Stress-testing threshold %THRESH% with 300 permutations...
 echo.
@@ -251,6 +253,21 @@ echo.
 echo.
 echo   Check the roll schedule above. Gaps should be tens of points, not
 echo   hundreds, and each roll should land a few days before expiry.
+goto :done
+
+:do_dashboard
+echo.
+echo   Starts a local web page at http://localhost:8000
+echo.
+echo   It shows the live candle chart, the model's direction and expected
+echo   move in points, and the calibration table those points come from -
+echo   what price actually did after each signal strength, measured on
+echo   out-of-sample predictions rather than asserted by the model.
+echo.
+echo   Nothing leaves your machine. Leave this window open while you use it;
+echo   press Ctrl+C here to stop the server.
+echo.
+"%VPY%" -m mnq.cli dashboard --open
 goto :done
 
 :do_status

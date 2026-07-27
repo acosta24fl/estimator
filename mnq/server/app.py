@@ -21,9 +21,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from ..config import Config
+from . import dashboard
 from .engine import LiveEngine
 
 log = logging.getLogger(__name__)
@@ -96,6 +98,45 @@ def create_app(cfg: Config, engine: LiveEngine | None = None) -> FastAPI:
             log.info("shutdown complete")
 
     app = FastAPI(title="MNQ Signal Engine", version="1.0", lifespan=lifespan)
+
+    # --------------------------------------------------------- dashboard
+    # Cached because rebuilding the feature matrix on every poll would make the
+    # page's own refresh the heaviest thing the process does.
+    _cache: dict[str, Any] = {"at": None, "payload": None}
+
+    @app.get("/", response_class=HTMLResponse)
+    async def dashboard_page() -> str:
+        return dashboard.read_page()
+
+    @app.get("/api/snapshot")
+    async def snapshot(bars: int = dashboard.DEFAULT_BARS) -> dict[str, Any]:
+        from ..models.projection import build_calibration, project
+
+        now = datetime.now(timezone.utc)
+        fresh = (
+            _cache["at"] is not None
+            and (now - _cache["at"]).total_seconds() < 10
+            and _cache["payload"] is not None
+        )
+        if fresh:
+            return _cache["payload"]
+
+        matrix = score = None
+        if _engine is not None:
+            try:
+                matrix = _engine.build_matrix()
+                score = _engine.score_latest()
+            except Exception as exc:  # noqa: BLE001 - the page must still render
+                log.warning("snapshot: live scoring failed (%s)", exc)
+
+        calibration = _calibration_cache(cfg, matrix)
+        payload = dashboard.build_snapshot(
+            cfg, matrix, score, project(score, calibration, cfg),
+            engine_status=_engine.status() if _engine is not None else None,
+            calibration=calibration, limit=bars,
+        )
+        _cache["at"], _cache["payload"] = now, payload
+        return payload
 
     @app.get("/health")
     async def health() -> dict[str, Any]:
@@ -235,3 +276,40 @@ def run(cfg: Config) -> None:
 
     app = create_app(cfg)
     uvicorn.run(app, host=cfg.server.host, port=cfg.server.port, log_level="info")
+
+
+# ------------------------------------------------------------- calibration
+
+_CALIBRATION: dict[str, Any] = {"built_at": None, "value": None}
+
+
+def _calibration_cache(cfg: Config, matrix):
+    """Build the confidence-to-outcome table once, then reuse it.
+
+    It depends on the walk-forward predictions rather than on live bars, so it
+    only needs rebuilding when those change - which is on a `train` run, not on
+    a dashboard poll.
+    """
+    from ..config import ARTIFACT_DIR
+    from ..models.projection import Calibration, build_calibration
+
+    path = ARTIFACT_DIR / "wf_predictions.csv"
+    if not path.exists() or matrix is None or matrix.empty:
+        return _CALIBRATION.get("value") or Calibration()
+
+    stamp = path.stat().st_mtime
+    if _CALIBRATION["built_at"] == stamp and _CALIBRATION["value"] is not None:
+        return _CALIBRATION["value"]
+
+    try:
+        import pandas as pd
+
+        preds = pd.read_csv(path, index_col=0, parse_dates=True)
+        preds.index = pd.to_datetime(preds.index, utc=True)
+        value = build_calibration(preds, matrix, cfg)
+    except Exception as exc:  # noqa: BLE001 - the page renders without it
+        log.warning("calibration unavailable (%s)", exc)
+        value = Calibration()
+
+    _CALIBRATION["built_at"], _CALIBRATION["value"] = stamp, value
+    return value

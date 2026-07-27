@@ -643,6 +643,42 @@ def cmd_ingest(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_dashboard(args, cfg: Config) -> int:
+    """Serve the local dashboard."""
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from .server.app import create_app
+    from .server.engine import LiveEngine
+
+    _apply_profile(args, cfg)
+    cfg.server.host, cfg.server.port = args.host, args.port
+
+    engine = LiveEngine(cfg)
+    # Seed from the cached bars so the chart has history immediately instead of
+    # waiting for live alerts to accumulate one minute at a time.
+    try:
+        frames, _ = _load_frames(args, cfg)
+        base_key = cfg.data.timeframes()[0].key
+        if base_key in frames and not frames[base_key].empty:
+            engine.store.seed(frames[base_key])
+            print(f"  seeded {len(engine.store):,} bars from the cache")
+    except Exception as exc:  # noqa: BLE001 - an empty chart still serves
+        logging.warning("could not seed bars (%s); the chart starts empty", exc)
+
+    url = f"http://{'localhost' if args.host in ('127.0.0.1', '0.0.0.0') else args.host}:{args.port}/"
+    print(f"\n  Dashboard: {url}")
+    print("  Press Ctrl+C to stop.\n")
+    if args.open:
+        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+
+    uvicorn.run(create_app(cfg, engine), host=args.host, port=args.port,
+                log_level="warning")
+    return 0
+
+
 def cmd_status(args, cfg: Config) -> int:
     print("=== data cache ===")
     cache = cfg.path(cfg.data.cache_dir)
@@ -859,6 +895,24 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--show", type=int, default=8,
                     help="how many contracts to list (default: 8)")
     sp.set_defaults(func=cmd_ingest)
+
+    sp = sub.add_parser(
+        "dashboard",
+        help="serve the local dashboard: chart, projection and system state",
+        description=(
+            "Opens a localhost page showing the live chart, the model's "
+            "direction and expected move in points, the calibration table "
+            "behind that projection, and engine state. Everything is served "
+            "from this process - no external scripts or keys."
+        ),
+    )
+    add_data_args(sp)
+    sp.add_argument("--host", default="127.0.0.1",
+                    help="bind address (default: localhost only)")
+    sp.add_argument("--port", type=int, default=8000)
+    sp.add_argument("--open", action="store_true",
+                    help="open a browser window once the server is up")
+    sp.set_defaults(func=cmd_dashboard)
 
     sp = sub.add_parser("status", help="show cached data, models and live state")
     sp.set_defaults(func=cmd_status)
