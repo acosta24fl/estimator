@@ -125,8 +125,9 @@ echo   2  Compare configurations   (the 4-way experiment)
 echo   3  Train + backtest         (train, price it, sweep thresholds)
 echo   4  Validate a result        (permutation test - is it real?)
 echo   5  Cross-instrument test    (train on ES/YM/RTY, predict MNQ)
-echo   6  Show status
-echo   7  Run the tests
+echo   6  Ingest purchased history  (real vendor data - the big one)
+echo   7  Show status
+echo   8  Run the tests
 echo.
 echo   0  Exit
 echo.
@@ -137,8 +138,9 @@ if "%CHOICE%"=="2" goto :do_experiment
 if "%CHOICE%"=="3" goto :do_backtest
 if "%CHOICE%"=="4" goto :do_validate
 if "%CHOICE%"=="5" goto :do_crossval
-if "%CHOICE%"=="6" goto :do_status
-if "%CHOICE%"=="7" goto :do_tests
+if "%CHOICE%"=="6" goto :do_ingest
+if "%CHOICE%"=="7" goto :do_status
+if "%CHOICE%"=="8" goto :do_tests
 if "%CHOICE%"=="0" exit /b 0
 echo   Not a valid choice.
 goto :menu
@@ -207,6 +209,37 @@ echo.
 echo.
 echo   AUC 0.55+ = the edge transfers, and pooled training is worth doing.
 echo   AUC near 0.50 = it does not, and the earlier result was noise.
+goto :done
+
+:do_ingest
+echo.
+echo   Turns purchased contract files into one adjusted continuous series.
+echo.
+echo   Yahoo's NQ=F splices the front month with no adjustment, so every
+echo   quarterly roll leaves a gap of tens of points that is not a real move.
+echo   Every momentum feature and every label treats it as if it were.
+echo.
+echo   Point this at the folder your vendor's CSVs are in. NQ is the same
+echo   index as MNQ at ten times the multiplier, and it has 25 years of
+echo   history instead of two.
+echo.
+set "SRC="
+set /p SRC=  Folder containing the vendor files:
+if "%SRC%"=="" goto :menu
+set "VEND="
+set /p VEND=  Vendor [firstrate / databento / generic, Enter for firstrate]:
+if "%VEND%"=="" set "VEND=firstrate"
+set "ROOTSYM="
+set /p ROOTSYM=  Product root [Enter for NQ]:
+if "%ROOTSYM%"=="" set "ROOTSYM=NQ"
+set "SRCINT="
+set /p SRCINT=  Bar interval of those files [Enter for 1m]:
+if "%SRCINT%"=="" set "SRCINT=1m"
+echo.
+"%VPY%" -m mnq.cli ingest "%SRC%" --vendor %VEND% --root %ROOTSYM% --interval %SRCINT% --resample 1h
+echo.
+echo   Check the roll schedule above. Gaps should be tens of points, not
+echo   hundreds, and each roll should land a few days before expiry.
 goto :done
 
 :do_status

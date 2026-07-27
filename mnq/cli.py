@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 
 from .config import ARTIFACT_DIR, Config
+from .data.vendor import SPECS as VENDOR_SPECS
 from .labeling import LONG, SHORT
 
 
@@ -501,6 +502,83 @@ def cmd_serve(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_ingest(args, cfg: Config) -> int:
+    """Turn purchased contract files into an adjusted continuous series.
+
+    Yahoo's ``NQ=F`` is a naive front-month splice with an unadjusted gap at
+    every quarterly roll. This path replaces it: read contract-level bars, find
+    where liquidity actually moved, and back-adjust so the gaps stop
+    masquerading as returns.
+    """
+    from .data.archive import Archive
+    from .data.roll import build_continuous, check_point_scale
+    from .data.vendor import load_contract_bars
+    from .data.yahoo import resample_ohlcv
+
+    archive = Archive(args.archive or cfg.path(cfg.data.archive_dir))
+    product = args.root.upper()
+
+    print(f"=== reading {args.vendor} files from {args.source} ===")
+    contracts = load_contract_bars(
+        args.source, args.vendor, root=product, pattern=args.pattern,
+        strict=args.strict,
+    )
+    total = sum(len(f) for f in contracts.values())
+    print(f"  {len(contracts)} contracts, {total:,} bars")
+    for code, frame in sorted(contracts.items())[: args.show]:
+        print(f"    {code:<8} {len(frame):>9,}  {frame.index[0]:%Y-%m-%d} .. "
+              f"{frame.index[-1]:%Y-%m-%d}")
+    if len(contracts) > args.show:
+        print(f"    ... and {len(contracts) - args.show} more")
+
+    if not args.no_archive:
+        archive.write_contracts(product, args.interval, contracts)
+        print(f"  archived -> {archive.contract_dir(product, args.interval)}")
+
+    print(f"\n=== building continuous series ({args.method}, {args.adjust}) ===")
+    series = build_continuous(
+        contracts,
+        method=args.method,
+        adjustment=args.adjust,
+        confirm_sessions=args.confirm_sessions,
+        calendar_offset_days=args.calendar_offset,
+    )
+    print(f"  {series.summary()}")
+
+    rolls = series.roll_frame
+    if not rolls.empty:
+        print("\n  roll schedule (last 8):")
+        for ts, row in rolls.tail(8).iterrows():
+            print(f"    {ts:%Y-%m-%d}  {row['from']:>7} -> {row['to']:<7} "
+                  f"gap {row['gap']:+8.2f}pt  ratio {row['ratio']:.6f}")
+
+    out_interval = args.interval
+    if args.resample:
+        from .data.roll import ContinuousSeries
+
+        # Resampling drops the contract column (there is no sensible way to
+        # aggregate it), but the roll schedule is kept so the coarser series
+        # can still be audited against the gaps that produced it.
+        coarse = resample_ohlcv(series.bars.drop(columns=["contract"]), args.resample)
+        series = ContinuousSeries(
+            coarse, series.rolls, series.adjustment, series.method
+        )
+        out_interval = args.resample
+        print(f"\n  resampled to {args.resample}: {len(coarse):,} bars")
+
+    if not args.no_archive:
+        archive.write_continuous(product, out_interval, series)
+        print(f"  wrote -> {archive.continuous_path(product, out_interval, args.adjust)}")
+
+    warning = check_point_scale(series.bars, cfg.labels.min_target_points)
+    if warning:
+        print(f"\n  [!] {warning}")
+
+    print("\nNext: retrain against this archive. The series is now long enough "
+          "that a walk-forward result means something.")
+    return 0
+
+
 def cmd_status(args, cfg: Config) -> int:
     print("=== data cache ===")
     cache = cfg.path(cfg.data.cache_dir)
@@ -513,6 +591,20 @@ def cmd_status(args, cfg: Config) -> int:
                 print(f"  {f.name:<24} unreadable ({exc})")
     else:
         print("  none — run `fetch`")
+
+    print("\n=== vendor archive ===")
+    try:
+        from .data.archive import Archive
+
+        table = Archive(cfg.path(cfg.data.archive_dir)).describe()
+        if table.empty:
+            print("  none — run `ingest` once you have purchased contract data")
+        else:
+            for _, row in table.iterrows():
+                print(f"  {row['kind']:<11} {row['product']:<5} {row['interval']:<4} "
+                      f"{row['items']:>4} item(s)  {row['first']} .. {row['last']}")
+    except Exception as exc:  # noqa: BLE001 - status must never fail
+        print(f"  unavailable ({exc})")
 
     print("\n=== models ===")
     meta = cfg.path("model_dir") / "ensemble_meta.json"
@@ -657,6 +749,47 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--seed-yahoo", action="store_true",
                     help="preload 7 days of 1m Yahoo bars so signals start immediately")
     sp.set_defaults(func=cmd_serve)
+
+    sp = sub.add_parser(
+        "ingest",
+        help="build an adjusted continuous series from purchased contract data",
+        description=(
+            "Read contract-level futures files, detect where volume rolled from "
+            "one contract to the next, and back-adjust the splice so roll gaps "
+            "stop appearing as returns. This is how you get 20+ years of NQ "
+            "instead of 2 years of Yahoo's MNQ=F."
+        ),
+    )
+    sp.add_argument("source", type=Path, help="directory of vendor files")
+    sp.add_argument("--vendor", default="firstrate",
+                    choices=sorted(VENDOR_SPECS),
+                    help="file layout to expect (default: firstrate)")
+    sp.add_argument("--root", default="NQ",
+                    help="product root to keep, e.g. NQ or ES (default: NQ)")
+    sp.add_argument("--interval", default="1m",
+                    help="bar interval of the source files (default: 1m)")
+    sp.add_argument("--resample", default=None,
+                    help="also store a coarser series, e.g. 1h")
+    sp.add_argument("--method", default="volume",
+                    choices=["volume", "open_interest", "calendar"],
+                    help="how to pick the roll date (default: volume)")
+    sp.add_argument("--adjust", default="ratio",
+                    choices=["ratio", "difference", "none"],
+                    help="back-adjustment; ratio keeps returns continuous")
+    sp.add_argument("--confirm-sessions", type=int, default=2,
+                    help="sessions the next contract must lead before rolling")
+    sp.add_argument("--calendar-offset", type=int, default=5,
+                    help="days before expiry to roll, for --method calendar")
+    sp.add_argument("--pattern", default="*", help="glob to filter source files")
+    sp.add_argument("--archive", type=Path, default=None,
+                    help="archive root (default: the configured archive_dir)")
+    sp.add_argument("--no-archive", action="store_true",
+                    help="report only; write nothing")
+    sp.add_argument("--strict", action="store_true",
+                    help="stop on the first unreadable file instead of skipping")
+    sp.add_argument("--show", type=int, default=8,
+                    help="how many contracts to list (default: 8)")
+    sp.set_defaults(func=cmd_ingest)
 
     sp = sub.add_parser("status", help="show cached data, models and live state")
     sp.set_defaults(func=cmd_status)

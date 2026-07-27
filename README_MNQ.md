@@ -24,7 +24,18 @@ The environment this was built in blocks Yahoo Finance at the network policy
 layer (403 on `query1.finance.yahoo.com`, `query2.finance.yahoo.com` and
 `fc.yahoo.com`), so nothing here has been validated against real bars.
 
-What has been verified is the machinery: 92 tests pass, including the lookahead
+A later run on real hourly bars did produce a promising-looking configuration —
+\$4,140 at a 0.62 entry threshold. It did not survive validation: **p = 0.18**
+over 300 permutations, with **97% of the profit coming from a single quarter**
+and three of six quarters losing money. The one encouraging detail was a
+*monotonic* profit-factor curve across seven thresholds (0.96 → 1.40), which is
+the shape a small real edge makes and is hard to fake.
+
+The constraint is sample size, and it is arithmetic rather than bad luck: ~180
+features and a 270-cell sweep against ~3,500 bars and 83 trades. See
+[Real history: `ingest`](#real-history-ingest) for the fix.
+
+What has been verified is the machinery: 207 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -169,6 +180,94 @@ Yahoo serves only ~60 days of 5-minute bars per request. `fetch` merges each
 download into a CSV cache, so running it weekly grows your usable history well
 past that cap. More history is the single highest-leverage improvement available
 here: the 4h EMA-200 alone needs ~33 days of 4h bars before it is even defined.
+
+---
+
+## Real history: `ingest`
+
+Free Yahoo data caps this system at roughly **3,500 usable hourly bars**, which
+produce **~83 trades** at a 0.62 threshold. Against ~180 features and a 270-cell
+sweep, that sample cannot answer the question being asked of it — a permutation
+test on a promising configuration returned p = 0.18, with one quarter carrying
+97% of the profit. That is the arithmetic of the sample, not bad luck.
+
+Two facts fix it:
+
+**NQ is MNQ.** Both track the Nasdaq-100; NQ is \$20/point, MNQ is \$2/point.
+MNQ only launched in 2019, but NQ has traded since 1999. For signal purposes NQ
+history *is* MNQ history, and it is ~25 years deep instead of two.
+
+**Yahoo's `NQ=F` is a naive splice.** It concatenates front-month contracts with
+no adjustment, so each quarterly roll injects a price gap that is not a return.
+In a representative run that gap is a **4.46σ** move — larger than almost
+anything the market actually does — and it lands four times a year, corrupting
+momentum features, inflating ATR (which sets your barriers), and letting
+triple-barrier labels resolve on an event that never traded.
+
+`ingest` solves both. It reads contract-level files, detects where volume
+actually migrated between contracts, and back-adjusts the splice:
+
+```bash
+python -m mnq.cli ingest ~/nq-data --vendor firstrate --root NQ \
+    --interval 1m --resample 1h
+```
+
+```
+=== building continuous series (volume, ratio) ===
+  25,890 bars  2022-01-01 .. 2024-12-14  11 rolls  median |gap| 20.0pt
+
+  roll schedule (last 8):
+    2023-12-08    NQZ23 -> NQH24   gap   +20.00pt  ratio 1.001360
+    2024-03-08    NQH24 -> NQM24   gap   +20.00pt  ratio 1.001389
+```
+
+Measured at the roll boundaries, adjustment takes the shock from **4.46σ down
+to 1.16σ** — the scale of an ordinary bar (median 0.67σ). The gap is removed;
+genuine movement across the boundary is kept.
+
+### Choosing the settings
+
+| Flag | Default | When to change it |
+| --- | --- | --- |
+| `--method` | `volume` | `calendar` when your files have no volume; `open_interest` if you have OI and prefer it |
+| `--adjust` | `ratio` | `difference` to keep point moves exact locally — but over a long history the accumulated offset can drive early prices to zero |
+| `--confirm-sessions` | `2` | Raise it if a noisy day flips the roll back and forth |
+| `--vendor` | `firstrate` | `databento` for raw exports (ns epochs, fixed-point prices), `generic` for plain UTC CSV |
+
+`ratio` is the default because nearly every feature here is return- or
+volatility-relative, and scaling prices by a constant cannot change a return.
+The trade-off is that historical prices no longer match what printed.
+
+### Where to buy it
+
+| Vendor | What you get | Notes |
+| --- | --- | --- |
+| **Databento** | CME direct (GLBX.MDP3), contract-level, ~2010→ | Best quality; you control the roll |
+| **FirstRate Data** | 1m continuous + per-contract, one-time fee | Cheapest credible option |
+| **IQFeed** | Deep intraday history, subscription | Needs a running client |
+| **CME DataMine** | Authoritative source | Expensive |
+
+Add an unlisted vendor by *describing* it rather than writing a parser — see
+`VendorSpec` in `mnq/data/vendor.py`.
+
+### One thing to change after ingesting
+
+`labels.min_target_points = 20` is not comparable across a long history. NQ
+traded near 1,500 in 2003 and above 20,000 in 2025, so 20 points means 1.3%
+then and 0.1% now. `ingest` prints a warning when it detects this. Express
+targets in ATR or percentage terms before training on decades of data.
+
+The archive lives outside the Yahoo cache (`artifacts/archive/`) because bought
+data is not re-downloadable for free:
+
+```
+contracts/NQ/1m/NQZ24.parquet      per-contract raw bars (source of truth)
+continuous/NQ_1h_ratio.parquet     the spliced, adjusted series
+continuous/NQ_1h_ratio.rolls.csv   the roll schedule, openable in Excel
+```
+
+Contract files are kept so the continuous series can always be rebuilt with
+different roll or adjustment settings.
 
 ---
 
@@ -374,11 +473,15 @@ mnq/
   config.py            all tunables; secrets from env only
   indicators.py        EMA, ATR, RSI, MACD, ADX, Bollinger, slope, momentum
   labeling.py          triple-barrier labels + forward-return target
-  cli.py               fetch / train / backtest / sweep / discover / serve
+  cli.py               fetch / ingest / train / backtest / sweep / serve
   data/
     yahoo.py           Yahoo loader with a merging cache
     store.py           live 1m bar store with resampling
     synthetic.py       offline generator (pipeline validation only)
+    contracts.py       futures symbology: codes, expiries, quarterly cycles
+    vendor.py          purchased-data ingestion; add a vendor by describing it
+    roll.py            roll detection + back-adjusted continuous series
+    archive.py         Parquet store for contract and continuous history
   features/builder.py  multi-timeframe matrix, leak-free HTF merge
   models/
     ensemble.py        XGB + LGBM + shared regressor + LR meta
@@ -395,7 +498,7 @@ mnq/
   server/
     engine.py          live signal generation and monitoring
     app.py             FastAPI webhook + 10-minute scheduler
-tests/                 78 tests
+tests/                 207 tests
 ```
 
 ## Tests

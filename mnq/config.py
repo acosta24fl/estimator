@@ -74,6 +74,10 @@ class DataConfig:
     wide_high_lookback: str = "5y"
 
     cache_dir: str = "artifacts/data"
+    # Vendor-purchased contract history and the continuous series built from it.
+    # Separate from cache_dir because this is bought data: it is never
+    # re-downloadable for free and must not be cleared with the Yahoo cache.
+    archive_dir: str = "artifacts/archive"
     # Yahoo 5m bars are stamped in exchange time; everything is normalised to UTC.
     tz: str = "UTC"
     # Drop bars outside CME's Globex session (23h/day, closed 17:00-18:00 ET).

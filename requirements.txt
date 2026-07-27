@@ -11,6 +11,9 @@ joblib>=1.3
 
 # Data
 yfinance>=0.2.40
+# Parquet for the vendor history archive. CSV loses the timezone and float
+# precision on every round trip, which matters at tens of millions of bars.
+pyarrow>=15.0
 
 # Live service
 fastapi>=0.110
