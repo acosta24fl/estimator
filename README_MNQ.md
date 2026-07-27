@@ -10,30 +10,42 @@ monitoring open positions minute by minute.
 
 ## Read this before anything else
 
-**This system has no demonstrated edge.** The first real-data run — 5m bars over
-60 days, MNQ price features only — returned **AUC 0.4981 long / 0.5075 short**:
-a coin flip. That configuration is not tradeable, and no amount of threshold
-tuning fixes a 0.50 AUC, because there is nothing there to amplify.
+**There is a real, small, directional edge. It is not yet shown to be
+profitable.** Those are different claims and the distinction is the whole
+story here.
 
-Two changes have since been built to test whether that verdict is about *the
-market* or about *the sample*: a wide (1h / 730-day) profile spanning many
-regimes instead of one, and cross-asset context features. **Neither has been run
-on real data yet.** `python -m mnq.cli experiment` runs the comparison.
+The first real-data run — 5m bars over 60 days, price features only — returned
+**AUC 0.4981 long / 0.5075 short**: a coin flip. Widening to 1h bars over 730
+days and adding cross-asset context lifted that to roughly 0.56. A sweep then
+found a configuration making \$4,140 at a 0.62 entry threshold, and it did
+**not** survive validation: **p = 0.18** over 300 permutations, **97% of the
+profit from a single quarter**, three of six quarters losing money.
 
-The environment this was built in blocks Yahoo Finance at the network policy
-layer (403 on `query1.finance.yahoo.com`, `query2.finance.yahoo.com` and
-`fc.yahoo.com`), so nothing here has been validated against real bars.
+That failure was arithmetic, not bad luck — ~180 features and a 270-cell sweep
+against ~3,500 bars and 83 trades. The one encouraging detail was a *monotonic*
+profit-factor curve across seven thresholds (0.96 → 1.40), the shape a small
+real edge makes.
 
-A later run on real hourly bars did produce a promising-looking configuration —
-\$4,140 at a 0.62 entry threshold. It did not survive validation: **p = 0.18**
-over 300 permutations, with **97% of the profit coming from a single quarter**
-and three of six quarters losing money. The one encouraging detail was a
-*monotonic* profit-factor curve across seven thresholds (0.96 → 1.40), which is
-the shape a small real edge makes and is hard to fake.
+The decisive test came next. Trained on **ES, YM and RTY only — never MNQ** —
+the model still predicted MNQ:
 
-The constraint is sample size, and it is arithmetic rather than bad luck: ~180
-features and a 270-cell sweep against ~3,500 bars and 83 trades. See
-[Real history: `ingest`](#real-history-ingest) for the fix.
+```
+   long: AUC 0.5782 on 6,400 bars     short: AUC 0.5522 on 6,400 bars
+   all 8 folds above chance (min 0.5176, max 0.6340)
+   across folds: long p=0.011, short p=0.055
+```
+
+No shared bars, one pre-specified test, no tuning. A pattern that transfers
+between instruments is a property of index futures, not memorised MNQ noise —
+and that is much harder to fake than any time split.
+
+So the constraint really was sample size. Training now
+[pools all four instruments](#pooled-training) for ~55,000 rows instead of
+13,700, and every backtest reports
+[per-trade expectancy against its own error bar](#is-it-profitable).
+
+**What remains unproven is profit.** AUC 0.578 is a small edge, and small
+edges die to costs. Read the PROFITABILITY block, not the backtest total.
 
 What has been verified is the machinery: 270 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
@@ -61,9 +73,10 @@ for either:
 - **AUC clears ~0.55 with a profitable backtest that holds in both halves of the
   sample.** Then paper-trade it live for several weeks before risking money.
 
-The 20-250 point objective is enforced as a *filter* (`min_edge_points`), not a
+The 25-250 point objective is enforced as a *filter* (`min_edge_points`), not a
 promise. It rejects setups too small to be worth the risk; it cannot conjure
-moves the market does not offer.
+moves the market does not offer. 25 points is \$50 a contract against \$1.74 of
+round-turn cost — 3.5% of the move, versus 8.7% at 10 points.
 
 ---
 
@@ -137,7 +150,7 @@ validated on a single regime generalises, and worse, sweeping on it will happily
 The wide profile uses 1h bars over ~730 days. That is a similar *bar count* but
 spans many regimes, which is what makes a walk-forward result mean something.
 Hourly ATR also runs ~100 points, so 2×ATR targets land naturally inside the
-20–250 point range.
+25–250 point range.
 
 ### Why cross-asset context exists
 
@@ -268,6 +281,68 @@ continuous/NQ_1h_ratio.rolls.csv   the roll schedule, openable in Excel
 
 Contract files are kept so the continuous series can always be rebuilt with
 different roll or adjustment settings.
+
+---
+
+## Pooled training
+
+The cross-instrument result makes MNQ's own ~13,700 hourly bars an arbitrary
+limit: if the pattern belongs to index futures generally, then ES, YM and RTY
+bars are training data too.
+
+```bash
+python -m mnq.cli train --pooled          # MNQ + ES + YM + RTY, ~55,000 rows
+```
+
+Roughly **4x the sample at zero cost**, from symbols already downloaded.
+
+The rule that makes it legitimate: **every fold trains only on bars preceding
+its test window, for all four instruments including MNQ itself.** Index futures
+are ~90% correlated, so training on ES during the hours being tested on MNQ
+would leak the answer straight through that correlation — and it would read as
+a spectacular result rather than a bug. Tests stub the models out and inspect
+the exact rows reaching `fit`, including that MNQ's own later bars never appear.
+
+The control is what makes the feature trustworthy: pooled training on four
+synthetic **random walks** returns AUC 0.46 / 0.49 — *no edge*. Pooling does
+not manufacture signal from noise.
+
+---
+
+## Is it profitable?
+
+A positive backtest total does not answer that. Every `backtest` now prints a
+PROFITABILITY block that asks three harder questions:
+
+**Does the win rate clear its own breakeven?** A 35% win rate is excellent at
+3:1 payoff and ruinous at 1:1. The report derives the breakeven win rate from
+the *observed* payoff ratio and shows the margin.
+
+**Is the edge bigger than its error bar?** Expectancy per trade with a 95%
+confidence interval and a one-sided t-test. A positive mean whose interval
+spans zero is reported **NOT ESTABLISHED** — that is the single most common way
+a backtest misleads, and it is invisible in the total. A test pins the case:
+59 small losers plus one large winner sums positive, means positive, and is
+correctly rejected.
+
+**What do costs take?** Round-turn cost as a share of the gross move.
+
+Shape of the output (**illustrative figures, not a result**):
+
+```
+  Win rate            : NN.N%
+  Breakeven win rate  : NN.N%  (implied by the observed payoff ratio)
+  Margin              : +N.N%
+  Expectancy          : $+N.NN per trade (+N.N points)
+  95% interval        : [$+N.NN, $+NN.NN]
+  VERDICT: PROFITABLE | NOT ESTABLISHED
+```
+
+Fewer than 30 trades is reported as *unmeasured*, not as a result.
+
+This prices **one** configuration. It does not correct for how many were tried
+to find it — that is `validate`'s job, and skipping it is what made the 0.62
+result look real.
 
 ---
 
