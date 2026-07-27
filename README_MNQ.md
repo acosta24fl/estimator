@@ -35,7 +35,7 @@ The constraint is sample size, and it is arithmetic rather than bad luck: ~180
 features and a 270-cell sweep against ~3,500 bars and 83 trades. See
 [Real history: `ingest`](#real-history-ingest) for the fix.
 
-What has been verified is the machinery: 207 tests pass, including the lookahead
+What has been verified is the machinery: 208 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -498,7 +498,7 @@ mnq/
   server/
     engine.py          live signal generation and monitoring
     app.py             FastAPI webhook + 10-minute scheduler
-tests/                 207 tests
+tests/                 208 tests
 ```
 
 ## Tests
