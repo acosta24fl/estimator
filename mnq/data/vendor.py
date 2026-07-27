@@ -30,6 +30,7 @@ from typing import Mapping
 
 import pandas as pd
 
+from ..timeutil import to_utc_ns
 from .contracts import parse_contract
 
 log = logging.getLogger(__name__)
@@ -134,7 +135,8 @@ def normalise(df: pd.DataFrame, spec: VendorSpec) -> pd.DataFrame:
             )
         idx = idx.tz_convert("UTC")
 
-    out.index = pd.DatetimeIndex(idx, name="timestamp")
+    out.index = to_utc_ns(idx)
+    out.index.name = "timestamp"
     out = out[out.index.notna()]
 
     missing = [c for c in CANONICAL if c not in out.columns]

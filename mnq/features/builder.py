@@ -27,6 +27,8 @@ import pandas as pd
 
 from .. import indicators as ind
 from ..config import FeatureConfig
+from ..timeutil import UTC_NS, align_merge_keys, to_utc_ns
+
 
 @dataclass(frozen=True)
 class Timeframe:
@@ -139,6 +141,20 @@ def _close_times(index: pd.DatetimeIndex, minutes: int) -> pd.DatetimeIndex:
     return index + pd.Timedelta(minutes=minutes)
 
 
+def _canonical(df: pd.DataFrame) -> pd.DataFrame:
+    """A copy of ``df`` whose index is on the canonical UTC resolution."""
+    if df is None or len(df) == 0 or str(df.index.dtype) == UTC_NS:
+        return df
+    out = df.copy()
+    name = df.index.name
+    out.index = to_utc_ns(out.index)
+    # Preserve the original name, including None: the already-canonical path
+    # above does not rename, so imposing one here would make the two paths
+    # produce indexes that compare unequal.
+    out.index.name = name
+    return out
+
+
 def build_feature_matrix(
     frames: dict[str, pd.DataFrame],
     cfg: FeatureConfig,
@@ -157,6 +173,11 @@ def build_feature_matrix(
             f"a '{base_tf.key}' frame is required as the base timeframe; "
             f"got {sorted(frames)}"
         )
+
+    # Put every frame on one datetime resolution before anything touches it.
+    # A live download and a cached file disagree on the unit, and that
+    # disagreement is fatal at the merge below rather than here.
+    frames = {k: _canonical(v) for k, v in frames.items()}
 
     base = frames[base_tf.key].sort_index()
     matrix = base.copy()
@@ -180,6 +201,9 @@ def build_feature_matrix(
 
         left = pd.DataFrame({"_asof": base_close}).sort_values("_asof")
         right = feats.sort_values("_available_at")
+        # A live download and a cached file can carry different datetime
+        # resolutions; merge_asof rejects the pair outright.
+        left, right = align_merge_keys(left, "_asof", right, "_available_at")
 
         merged = pd.merge_asof(
             left,

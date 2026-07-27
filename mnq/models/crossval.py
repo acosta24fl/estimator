@@ -146,15 +146,33 @@ def cross_instrument_evaluate(
     """
     log.info("loading %s for training", ", ".join(train_symbols))
     train_data = []
+    failures: dict[str, str] = {}
     for sym in train_symbols:
         try:
             train_data.append(prepare_instrument(sym, cfg, context, refresh))
             log.info("  %s: %d rows", sym, len(train_data[-1]["features"]))
         except Exception as exc:  # noqa: BLE001 - a missing symbol is survivable
-            log.warning("  %s unavailable: %s", sym, str(exc)[:80])
+            # Do not truncate. A clipped message once hid the second half of
+            # "...must be the same type", turning a one-line dtype fix into a
+            # guess about which symbol Yahoo had retired.
+            failures[sym] = f"{type(exc).__name__}: {exc}"
+            log.warning("  %s unavailable: %s", sym, failures[sym])
 
     if not train_data:
-        raise RuntimeError("no training instruments could be loaded")
+        distinct = set(failures.values())
+        if len(distinct) == 1 and len(failures) > 1:
+            # Every symbol failing identically is a bug in this code, not a
+            # data availability problem. Say so, and show the whole error.
+            raise RuntimeError(
+                f"no training instruments could be loaded. All {len(failures)} "
+                f"failed with the same error, which points at a systemic "
+                f"problem rather than missing data:\n\n    "
+                f"{distinct.pop()}\n"
+            )
+        detail = "\n".join(f"    {s}: {e}" for s, e in failures.items())
+        raise RuntimeError(
+            f"no training instruments could be loaded:\n\n{detail}\n"
+        )
 
     log.info("loading %s for testing", test_symbol)
     test = prepare_instrument(test_symbol, cfg, context, refresh)

@@ -27,6 +27,7 @@ import numpy as np
 import pandas as pd
 
 from ..data.context import ContextConfig
+from ..timeutil import align_merge_keys
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +154,10 @@ def _merge_on_close(
     """Attach context features to base bars using completion times only."""
     left = pd.DataFrame({"_asof": base_close_time}).sort_values("_asof")
     right = feats.sort_values("_available_at")
+    # The price frame may be a fresh download while the context frame came
+    # from cache - same instants, different resolution, and merge_asof
+    # refuses to mix them.
+    left, right = align_merge_keys(left, "_asof", right, "_available_at")
     merged = pd.merge_asof(
         left, right,
         left_on="_asof", right_on="_available_at",

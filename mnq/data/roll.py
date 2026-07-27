@@ -42,6 +42,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
+from ..timeutil import to_utc_ns
 from .contracts import Contract, parse_contract
 
 log = logging.getLogger(__name__)
@@ -141,10 +142,7 @@ def _prepare(
         frame = df.copy()
         if not isinstance(frame.index, pd.DatetimeIndex):
             raise TypeError(f"{code}: index must be a DatetimeIndex")
-        if frame.index.tz is None:
-            frame.index = frame.index.tz_localize("UTC")
-        else:
-            frame.index = frame.index.tz_convert("UTC")
+        frame.index = to_utc_ns(frame.index)
         missing = [c for c in OHLC if c not in frame.columns]
         if missing:
             raise ValueError(f"{code}: missing columns {missing}")

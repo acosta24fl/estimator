@@ -15,6 +15,7 @@ from pathlib import Path
 import pandas as pd
 
 from ..config import Config, DataConfig
+from ..timeutil import to_utc_ns
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ def _normalise(df: pd.DataFrame, tz: str) -> pd.DataFrame:
         raise ValueError(f"Yahoo response missing columns: {sorted(missing)}")
     df = df[keep].copy()
 
-    idx = pd.to_datetime(df.index, utc=True)
+    idx = to_utc_ns(df.index)
     df.index = idx.tz_convert(tz) if tz != "UTC" else idx
     df.index.name = "timestamp"
 
@@ -97,7 +98,7 @@ def load_cached(path: Path, tz: str = "UTC") -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=OHLCV)
     df = pd.read_csv(path, index_col=0, parse_dates=True)
-    idx = pd.to_datetime(df.index, utc=True)
+    idx = to_utc_ns(df.index)
     df.index = idx.tz_convert(tz) if tz != "UTC" else idx
     df.index.name = "timestamp"
     return df[OHLCV].astype(float).sort_index()
