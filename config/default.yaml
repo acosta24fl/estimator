@@ -45,7 +45,7 @@ labels:
   horizon_bars: 24         # 24 x 5m = 2 hours to resolve
   tp_atr_mult: 2.0
   sl_atr_mult: 1.0
-  min_target_points: 20.0  # the low end of the 20-250 point ambition
+  min_target_points: 25.0  # only label moves worth trading
   max_target_points: 300.0
   fwd_return_bars: 12      # horizon for the shared regression target
 
@@ -65,7 +65,7 @@ trade:
 
   # Entry gates. Set these from `sweep` output, not by intuition.
   min_probability: 0.58
-  min_edge_points: 20.0
+  min_edge_points: 25.0
   max_concurrent_trades: 1
   cooldown_bars: 6         # 30 minutes between signals
 

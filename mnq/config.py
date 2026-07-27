@@ -119,7 +119,7 @@ class LabelConfig:
     """Triple-barrier definition.
 
     Barriers are ATR multiples so a target automatically widens in fast markets
-    and tightens in quiet ones, which is what keeps the 20-250 point ambition
+    and tightens in quiet ones, which is what keeps the 25-250 point ambition
     realistic instead of a fixed target that is trivial in one regime and
     impossible in another.
     """
@@ -127,7 +127,9 @@ class LabelConfig:
     horizon_bars: int = 24          # 24 x 5m = 2 hours to resolve
     tp_atr_mult: float = 2.0
     sl_atr_mult: float = 1.0
-    min_target_points: float = 20.0  # reject setups that cannot pay for the risk
+    # 25 points = $50 a contract, against ~$1.74 of round-turn cost. Smaller
+    # targets exist but hand a growing share of the move to slippage.
+    min_target_points: float = 25.0
     max_target_points: float = 300.0
     fwd_return_bars: int = 12        # horizon for the shared regression target
 
@@ -198,7 +200,7 @@ class TradeConfig:
 
     # Signal gating, tuned by the sweep.
     min_probability: float = 0.58
-    min_edge_points: float = 20.0
+    min_edge_points: float = 25.0
     max_concurrent_trades: int = 1
     cooldown_bars: int = 6  # 30 minutes between signals
 

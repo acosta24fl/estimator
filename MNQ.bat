@@ -122,7 +122,7 @@ echo ------------------------------------------------------------
 echo.
 echo   1  Update price data        (run weekly - builds history)
 echo   2  Compare configurations   (the 4-way experiment)
-echo   3  Train + backtest         (train, price it, sweep thresholds)
+echo   3  Train + backtest         (pooled 4-instrument - the main path)
 echo   4  Validate a result        (permutation test - is it real?)
 echo   5  Cross-instrument test    (train on ES/YM/RTY, predict MNQ)
 echo   6  Ingest purchased history  (real vendor data - the big one)
@@ -165,17 +165,28 @@ goto :done
 
 :do_backtest
 echo.
-echo   Training the wide profile, then backtesting and sweeping.
-echo   Takes 30-90 minutes.
+echo   Trains on MNQ, ES, YM and RTY together, then predicts MNQ.
 echo.
-"%VPY%" -m mnq.cli train --profile wide
+echo   The cross-instrument test (option 5) showed the pattern belongs to
+echo   index futures rather than to MNQ, which makes MNQ's own 13,700 bars
+echo   an arbitrary limit. Pooling gives roughly four times the training
+echo   data from symbols already downloaded. Every fold still trains only
+echo   on bars earlier than the window it is tested on.
+echo.
+echo   Then it prices the result after slippage and commission and says
+echo   whether the edge is bigger than its own error bar.
+echo.
+echo   Takes 45-120 minutes.
+echo.
+"%VPY%" -m mnq.cli train --pooled
 if errorlevel 1 goto :done
 "%VPY%" -m mnq.cli backtest --profile wide
 "%VPY%" -m mnq.cli sweep --profile wide --min-trades 15
 set "HAVE_MODEL=yes"
 echo.
-echo   Look at is_net_usd and oos_net_usd. BOTH must be positive -
-echo   and even then, run option 4 before believing it.
+echo   Read the PROFITABILITY block, not the backtest total. A positive
+echo   total whose 95%% interval includes zero is not an edge.
+echo   Then run option 4 before believing any of it.
 goto :done
 
 :do_validate

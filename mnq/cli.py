@@ -154,6 +154,9 @@ def cmd_fetch(args, cfg: Config) -> int:
 
 
 def cmd_train(args, cfg: Config) -> int:
+    if getattr(args, "pooled", False):
+        return _train_pooled(args, cfg)
+
     from .models.train import (
         prepare, save_bundle, summarise_labels, train_final, walk_forward_evaluate,
     )
@@ -188,6 +191,54 @@ def cmd_train(args, cfg: Config) -> int:
 
     print(f"\nPredictions -> {out / 'wf_predictions.csv'}")
     print("Run `python -m mnq.cli backtest` next to price these predictions.")
+    return 0
+
+
+def _train_pooled(args, cfg: Config) -> int:
+    """Train on every index future at once, predict MNQ.
+
+    The cross-instrument test showed the pattern is a property of index futures
+    rather than of MNQ, which makes MNQ's own ~13,700 bars an arbitrary
+    restriction. Pooling lifts the training sample roughly fourfold using data
+    already on disk.
+    """
+    from .models.pooled import DEFAULT_POOL, format_report, pooled_walk_forward
+
+    # Pooling only makes sense on the wide profile: 60 days of intraday history
+    # per symbol is far too short to be worth combining.
+    args.profile = "wide"
+    _apply_profile(args, cfg)
+
+    context: dict[str, pd.DataFrame] = {}
+    if cfg.context.enabled:
+        from .data.context import fetch_context
+
+        try:
+            context = fetch_context(
+                cfg.context, cfg.path(cfg.context.cache_dir), cfg.data.tz,
+                refresh=not args.no_refresh,
+            )
+        except Exception as exc:  # noqa: BLE001 - price-only is still valid
+            logging.warning("context unavailable (%s); continuing price-only", exc)
+
+    pool = tuple(args.pool.split(",")) if getattr(args, "pool", None) else DEFAULT_POOL
+    print(f"\n--- pooled walk-forward: {', '.join(pool)} ---")
+    matrix, preds, metrics = pooled_walk_forward(
+        cfg, pool=pool, context=context,
+        n_folds=cfg.model.wf_folds, refresh=not args.no_refresh,
+    )
+
+    out = ARTIFACT_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    preds.to_csv(out / "wf_predictions.csv")
+    (out / "pooled_metrics.json").write_text(
+        json.dumps(metrics, indent=2, default=float)
+    )
+
+    print()
+    print(format_report(metrics))
+    print(f"\nPredictions -> {out / 'wf_predictions.csv'}")
+    print("Run `python -m mnq.cli backtest` next to price them after costs.")
     return 0
 
 
@@ -245,6 +296,19 @@ def cmd_backtest(args, cfg: Config) -> int:
                   f"min_edge_points")
         print("\n  Lower trade.min_probability toward the p95 above, or run "
               "`sweep` to choose it against both sample halves.")
+
+    # The backtest total says what happened; this says whether it means
+    # anything. A positive sum whose confidence interval spans zero is the
+    # most common way a backtest misleads, and it is invisible in the total.
+    from .backtest.profit import expectancy, format_report, target_coverage
+
+    exp = expectancy(result.frame, cfg)
+    cov = target_coverage(data.matrix, cfg)
+    print()
+    print(format_report(exp, cov))
+    (ARTIFACT_DIR / "profitability.json").write_text(
+        json.dumps({"expectancy": exp, "coverage": cov}, indent=2, default=float)
+    )
 
     if not result.frame.empty:
         path = ARTIFACT_DIR / "backtest_trades.csv"
@@ -688,6 +752,11 @@ def build_parser() -> argparse.ArgumentParser:
     add_data_args(sp)
     sp.add_argument("--skip-final", action="store_true",
                     help="evaluate only; do not fit or save production models")
+    sp.add_argument("--pooled", action="store_true",
+                    help="train on MNQ+ES+YM+RTY together (~4x the sample); "
+                         "each fold still trains only on earlier bars")
+    sp.add_argument("--pool", type=str, default=None,
+                    help="comma-separated pool (default: MNQ=F,ES=F,YM=F,RTY=F)")
     sp.set_defaults(func=cmd_train)
 
     sp = sub.add_parser("backtest", help="simulate on out-of-sample predictions")
