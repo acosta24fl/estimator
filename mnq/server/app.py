@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 # Populated by create_app so route handlers can reach them.
 _engine: LiveEngine | None = None
 _config: Config | None = None
+_autopilot: Any = None
 
 
 class AlertPayload(BaseModel):
@@ -77,10 +78,13 @@ def _parse_time(raw: str | None) -> datetime:
         return datetime.now(timezone.utc)
 
 
-def create_app(cfg: Config, engine: LiveEngine | None = None) -> FastAPI:
-    global _engine, _config
+def create_app(
+    cfg: Config, engine: LiveEngine | None = None, autopilot: Any = None
+) -> FastAPI:
+    global _engine, _config, _autopilot
     _config = cfg
     _engine = engine or LiveEngine(cfg)
+    _autopilot = autopilot
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -134,6 +138,7 @@ def create_app(cfg: Config, engine: LiveEngine | None = None) -> FastAPI:
             cfg, matrix, score, project(score, calibration, cfg),
             engine_status=_engine.status() if _engine is not None else None,
             calibration=calibration, limit=bars,
+            autopilot=_autopilot.status() if _autopilot is not None else None,
         )
         _cache["at"], _cache["payload"] = now, payload
         return payload

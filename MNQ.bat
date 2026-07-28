@@ -127,8 +127,9 @@ echo   4  Validate a result        (permutation test - is it real?)
 echo   5  Cross-instrument test    (train on ES/YM/RTY, predict MNQ)
 echo   6  Ingest purchased history  (real vendor data - the big one)
 echo   7  Open the dashboard      (live chart + projection in a browser)
-echo   8  Show status
-echo   9  Run the tests
+echo   8  AUTOPILOT               (runs by itself - paper trading)
+echo   9  Show status
+echo  10  Run the tests
 echo.
 echo   0  Exit
 echo.
@@ -141,8 +142,9 @@ if "%CHOICE%"=="4" goto :do_validate
 if "%CHOICE%"=="5" goto :do_crossval
 if "%CHOICE%"=="6" goto :do_ingest
 if "%CHOICE%"=="7" goto :do_dashboard
-if "%CHOICE%"=="8" goto :do_status
-if "%CHOICE%"=="9" goto :do_tests
+if "%CHOICE%"=="8" goto :do_auto
+if "%CHOICE%"=="9" goto :do_status
+if "%CHOICE%"=="10" goto :do_tests
 if "%CHOICE%"=="0" exit /b 0
 echo   Not a valid choice.
 goto :menu
@@ -268,6 +270,31 @@ echo   Nothing leaves your machine. Leave this window open while you use it;
 echo   press Ctrl+C here to stop the server.
 echo.
 "%VPY%" -m mnq.cli dashboard --open
+goto :done
+
+:do_auto
+echo.
+echo   Runs the system unattended until you stop it.
+echo.
+echo   Every 5 minutes it pulls fresh bars. Every 10 minutes it looks for
+echo   a signal. It manages open positions with the same rules the backtest
+echo   used, writes every closed trade to a journal, and once a week it
+echo   retrains on the pooled instruments.
+echo.
+echo   PAPER TRADING ONLY. No broker is connected and no orders are placed.
+echo   It records what would have happened - which is the evidence needed
+echo   before risking money, and the only honest thing to automate at this
+echo   stage.
+echo.
+echo   The dashboard opens automatically. Watch "Paper results vs backtest":
+echo   it tests whether the live win rate still matches the 37.5%% the
+echo   backtest produced, and says when the sample is still too small to
+echo   tell - which it will be for the first few weeks.
+echo.
+echo   Leave this window open. Ctrl+C stops it. Progress is saved, so
+echo   stopping and restarting loses nothing.
+echo.
+"%VPY%" -m mnq.cli auto --open
 goto :done
 
 :do_status

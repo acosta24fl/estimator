@@ -47,7 +47,7 @@ So the constraint really was sample size. Training now
 **What remains unproven is profit.** AUC 0.578 is a small edge, and small
 edges die to costs. Read the PROFITABILITY block, not the backtest total.
 
-What has been verified is the machinery: 292 tests pass, including the lookahead
+What has been verified is the machinery: 315 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -394,6 +394,63 @@ is never mistaken for a trade signal.
 
 ---
 
+## Autopilot — running unattended
+
+```bash
+python -m mnq.cli auto --open        # or MNQ.bat -> option 8
+```
+
+One local process that keeps working while you are not watching:
+
+| Every | It does |
+| --- | --- |
+| 5 minutes | pulls fresh bars and merges them into the cache |
+| every bar | manages open positions through the same TradeManager the backtest uses |
+| 10 minutes | evaluates for a new signal |
+| on close | journals the trade and re-tests the live win rate |
+| weekly | retrains on the pooled instruments |
+
+**It paper-trades. It does not place orders.** There is no broker integration
+anywhere in this repository, by design. The permutation test passed at
+p=0.0067, which justifies forward testing and nothing more — and the honest
+thing to automate at that stage is generating the forward evidence, not
+spending money on its absence.
+
+Progress is saved continuously, so stopping and restarting loses nothing.
+
+### The number to watch
+
+The dashboard's **Paper results vs backtest** panel runs a binomial test of the
+live win rate against the backtest's 37.5%, and — the part that matters — it
+distinguishes *"no evidence of a problem"* from *"too early to tell"*:
+
+```
+CONSISTENT — live win rate 30.4% vs backtest 37.5% over 46 trades
+             (p=0.36) - no evidence the edge has changed.
+```
+
+That example is net **−$600** and still reads CONSISTENT, correctly. At a 37.5%
+win rate a losing stretch of that size is ordinary, and a system that cried
+"broken" there would train you to ignore it. The verdicts are:
+
+| Verdict | Meaning |
+| --- | --- |
+| **too early** | under ~30 trades — the interval is too wide to conclude anything |
+| **consistent** | no evidence the edge has changed |
+| **broken** | a real gap, not a losing streak. Stop and re-examine |
+| **outperforming** | above backtest — treat as luck until it persists |
+
+### Reliability
+
+The loop catches exceptions per cycle rather than per run. A crash in one
+cycle would otherwise end autonomous operation silently while the dashboard
+kept serving a frozen snapshot — indistinguishable from a quiet market. Failed
+polls are counted and surfaced; a failed retrain keeps the previous model
+rather than leaving a half-written bundle in place. Retraining runs off the
+main loop so position management continues during the several minutes it takes.
+
+---
+
 ## Going live
 
 ```bash
@@ -624,7 +681,7 @@ mnq/
     app.py             FastAPI webhook + 10-minute scheduler + dashboard API
     dashboard.py       snapshot payloads for the local page
     static/dashboard.html  self-contained page, canvas chart, no CDN
-tests/                 292 tests
+tests/                 315 tests
 ```
 
 ## Tests

@@ -112,6 +112,18 @@
     </div>
 
     <div class="card" style="margin-top:16px">
+      <h2>Autopilot <span id="autostate" class="pill"></span></h2>
+      <div id="auto"></div>
+      <div class="note" id="autonote"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Paper results vs backtest</h2>
+      <div id="paper"></div>
+      <div class="note" id="drift"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
       <h2>Engine</h2>
       <div id="engine"></div>
     </div>
@@ -321,6 +333,58 @@ function render(d){
     ["models", e.models_loaded ? "loaded" : "not loaded"],
     ["last signal", e.last_signal_at ? new Date(e.last_signal_at).toLocaleTimeString() : "none"],
   ] : [["state","not running"]]);
+
+  // ---- autopilot ----
+  const a = d.autopilot;
+  const st = $("autostate");
+  if (a){
+    const running = a.running;
+    st.textContent = running ? "running · paper" : "stopped";
+    st.style.color = running ? "var(--up)" : "var(--dim)";
+    const s2 = a.state || {};
+    const when = v => v ? new Date(v).toLocaleTimeString() : "never";
+    rows("auto", [
+      ["polls", `${s2.polls ?? 0}${s2.poll_failures ? ` (${s2.poll_failures} failed)` : ""}`],
+      ["last poll", when(s2.last_poll)],
+      ["signals", s2.signals ?? 0],
+      ["bars stored", (s2.bars ?? 0).toLocaleString()],
+      ["retrains", s2.retrains ?? 0],
+      ["next retrain", s2.next_retrain
+        ? new Date(s2.next_retrain).toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit"})
+        : "—"],
+    ]);
+    $("autonote").textContent = s2.retrain_running
+      ? "Retraining now — polling and trade management continue."
+      : (s2.last_error ? "Last error: " + s2.last_error : "");
+    $("autonote").className = "note" + (s2.last_error ? " warn" : "");
+  } else {
+    st.textContent = "not started";
+    rows("auto", [["mode", "manual"]]);
+    $("autonote").textContent =
+      "Run MNQ.bat option 8 (or `mnq.cli auto`) for unattended paper trading.";
+  }
+
+  // ---- paper results ----
+  const pp = a?.paper, dr = a?.drift;
+  if (pp && pp.n){
+    rows("paper", [
+      ["paper trades", pp.n],
+      ["win rate", fmt(100*pp.win_rate,1) + "%"],
+      ["backtest win rate", dr?.baseline_win_rate != null
+        ? fmt(100*dr.baseline_win_rate,1) + "%" : "—"],
+      ["net", "$" + signed(pp.net_usd,2), cls(pp.net_usd)],
+      ["expectancy", "$" + signed(pp.expectancy_usd,2), cls(pp.expectancy_usd)],
+    ]);
+  } else {
+    rows("paper", [["paper trades", 0]]);
+  }
+  if (dr){
+    const tone = {broken:"down", outperforming:"up", consistent:"", "too early":"",
+                  "no baseline":"warn", "no trades yet":""}[dr.verdict] || "";
+    $("drift").innerHTML = `<b class="${tone}">${dr.verdict.toUpperCase()}</b> — ${dr.detail || ""}`;
+  } else {
+    $("drift").textContent = "";
+  }
 
   // ---- calibration ----
   const tb = $("calib").querySelector("tbody");

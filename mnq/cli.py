@@ -679,6 +679,84 @@ def cmd_dashboard(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_auto(args, cfg: Config) -> int:
+    """Run unattended: poll, paper-trade, retrain, and serve the dashboard.
+
+    One process. It keeps working while you are not watching, and the dashboard
+    is how you check on it.
+    """
+    import threading
+    import webbrowser
+
+    import uvicorn
+
+    from .autopilot import Autopilot, AutopilotConfig
+    from .server.app import create_app
+    from .server.engine import LiveEngine
+
+    args.profile = "wide"
+    _apply_profile(args, cfg)
+    cfg.server.host, cfg.server.port = args.host, args.port
+
+    engine = LiveEngine(cfg)
+    if engine.bundle is None:
+        print("\n  [!] No trained models found. The autopilot will still collect")
+        print("      bars and can retrain, but it cannot generate signals until")
+        print("      a model exists. Run option 3 first for the full path.\n")
+
+    try:
+        frames, _ = _load_frames(args, cfg)
+        base_key = cfg.data.timeframes()[0].key
+        if base_key in frames and not frames[base_key].empty:
+            engine.store.seed(frames[base_key])
+            print(f"  seeded {len(engine.store):,} bars from the cache")
+    except Exception as exc:  # noqa: BLE001 - it will fill in from polling
+        logging.warning("could not seed bars (%s)", exc)
+
+    auto = Autopilot(cfg, engine, AutopilotConfig(
+        poll_seconds=args.poll,
+        signal_seconds=args.signal_every,
+        retrain_hours=args.retrain_hours,
+        enabled_retrain=not args.no_retrain,
+        retrain_on_start=args.retrain_now,
+    ))
+    auto.start()
+
+    url = f"http://localhost:{args.port}/"
+    print(f"""
+  ============================================================
+    AUTOPILOT RUNNING - PAPER TRADING ONLY
+  ============================================================
+    Dashboard    : {url}
+    Poll         : every {args.poll}s
+    Signal check : every {args.signal_every}s
+    Retrain      : {'off' if args.no_retrain else f'every {args.retrain_hours:g}h'}
+    Journal      : {ARTIFACT_DIR / 'paper_trades.csv'}
+
+    No orders are placed. There is no broker connected to this
+    system. It simulates trades and records what would have
+    happened, which is the evidence the next decision needs.
+
+    Leave this window open. Ctrl+C stops it.
+  ============================================================
+""")
+    if args.open:
+        threading.Timer(2.0, lambda: webbrowser.open(url)).start()
+
+    try:
+        uvicorn.run(create_app(cfg, engine, autopilot=auto),
+                    host=args.host, port=args.port, log_level="warning")
+    except KeyboardInterrupt:
+        pass
+    finally:
+        auto.stop()
+        stats = auto.journal.stats()
+        if stats.get("n"):
+            print(f"\n  Paper trades this session and before: {stats['n']}, "
+                  f"win rate {stats['win_rate']:.1%}, net ${stats['net_usd']:+,.2f}")
+    return 0
+
+
 def cmd_status(args, cfg: Config) -> int:
     print("=== data cache ===")
     cache = cfg.path(cfg.data.cache_dir)
@@ -913,6 +991,33 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--open", action="store_true",
                     help="open a browser window once the server is up")
     sp.set_defaults(func=cmd_dashboard)
+
+    sp = sub.add_parser(
+        "auto",
+        help="run unattended: poll, paper-trade, retrain, serve the dashboard",
+        description=(
+            "Autonomous local operation. Polls the market, manages simulated "
+            "positions through the same rules the backtest uses, journals every "
+            "closed trade, tests the live win rate against the backtest, and "
+            "retrains on a slow cadence. PAPER ONLY - no broker is connected "
+            "and no orders are placed."
+        ),
+    )
+    add_data_args(sp)
+    sp.add_argument("--host", default="127.0.0.1")
+    sp.add_argument("--port", type=int, default=8000)
+    sp.add_argument("--poll", type=int, default=300,
+                    help="seconds between market-data refreshes (default: 300)")
+    sp.add_argument("--signal-every", type=int, default=600,
+                    help="seconds between signal evaluations (default: 600)")
+    sp.add_argument("--retrain-hours", type=float, default=168.0,
+                    help="hours between retrains (default: 168 = weekly)")
+    sp.add_argument("--no-retrain", action="store_true",
+                    help="never retrain; keep the current model")
+    sp.add_argument("--retrain-now", action="store_true",
+                    help="retrain once at startup before settling into the cadence")
+    sp.add_argument("--open", action="store_true", help="open the dashboard")
+    sp.set_defaults(func=cmd_auto)
 
     sp = sub.add_parser("status", help="show cached data, models and live state")
     sp.set_defaults(func=cmd_status)

@@ -131,6 +131,7 @@ def build_snapshot(
     engine_status: dict[str, Any] | None = None,
     calibration=None,
     limit: int = DEFAULT_BARS,
+    autopilot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything the page needs, in one response."""
     payload: dict[str, Any] = {
@@ -149,6 +150,7 @@ def build_snapshot(
         },
         "engine": engine_status or {},
         "calibration": calibration.to_records() if calibration is not None else [],
+        "autopilot": autopilot,
     }
 
     if score:
