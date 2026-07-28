@@ -47,7 +47,7 @@ So the constraint really was sample size. Training now
 **What remains unproven is profit.** AUC 0.578 is a small edge, and small
 edges die to costs. Read the PROFITABILITY block, not the backtest total.
 
-What has been verified is the machinery: 315 tests pass, including the lookahead
+What has been verified is the machinery: 342 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -451,6 +451,81 @@ main loop so position management continues during the several minutes it takes.
 
 ---
 
+## Real-time trend and multi-horizon forecasting
+
+The dashboard projects price at **5m, 10m, 15m, 30m, 1h, 4h and 24h**, calls
+the trend continuation or reversal, and grades the whole picture with an alpha
+score. The design constraint that shapes all of it:
+
+> Short-horizon index futures moves are closer to a random walk than hourly
+> ones. Five minutes ahead is *harder* to predict, not easier. A panel showing
+> a confident destination at all seven horizons would be fabricating six.
+
+So **every horizon measures and displays its own skill**:
+
+```
+skill = 1 - MSE(conditional forecast) / MSE(no-change forecast)
+```
+
+Zero means no better than assuming price does not move. Only positive skill
+earns full contrast on the page; the rest is dimmed and hatched.
+
+### How a forecast is produced
+
+Not from a regressor. Price history is bucketed by **state** — trend direction
+and strength (ATR-normalised slope) crossed with volatility regime — and each
+bucket's realised forward moves become an empirical distribution. The forecast
+is that bucket's median, with its 25–75 and 10–90 bands. Every number is a
+quantile of something that actually happened from a comparable state.
+
+### Two guards, both found by the random-walk control
+
+The control is simple: feed it pure noise and require grade F.
+
+**Skill must be out of sample.** Bucket medians are fitted on the first 70% of
+history and scored on the rest. Measured in-sample a random walk scored skill
+up to **+0.12 and an alpha grade of A**, because a conditional median always
+fits the data it was computed from.
+
+**Overlapping windows inflate the sample.** Even out of sample, 18,000 test
+bars contain only ~12 *independent* 24-hour windows, and the 1440m skill
+estimate swung between **+0.14 and −0.32** across seeds. Effective n =
+test bars ÷ horizon must clear 30, so 24h honestly reports "too few
+independent windows" until months of 1-minute history exist.
+
+With both guards, three random-walk seeds all score **F, 0/7 horizons**, while
+a synthetic momentum series scores **6/7**.
+
+### Alpha score
+
+0–100 from four components, anchored so it cannot flatter: with no measurable
+skill at any horizon the score is **exactly zero**, however strong the trend
+looks.
+
+| Component | Weight | What it measures |
+| --- | --- | --- |
+| skill | 35% | out-of-sample skill at the best horizon |
+| conviction | 30% | how far the directional call sits from the base rate |
+| payoff | 20% | expected move against round-turn cost |
+| agreement | 15% | whether the skilled horizons point the same way |
+
+### The dashboard
+
+Its organising rule is **visual weight encodes evidence**:
+
+- **Forward cone** — the chart extends past NOW with quantile ribbons. Skilled
+  horizons draw solid; unskilled ones are barely visible.
+- **Horizon ladder** — one rung per horizon, each a band showing where price
+  landed historically from this state, with the median as a notch and no-change
+  as a hairline. Rungs without skill are dimmed and hatched. The axis is
+  signed-square-root scaled, or the 24h band (hundreds of points) would squash
+  the 5m band (a few points) into a flat line.
+- **Trend read** — continuation or reversal, always judged against the
+  unconditional base rate, so 55% continuation in a market that rises 55% of
+  the time is correctly reported as noise.
+
+---
+
 ## Going live
 
 ```bash
@@ -681,7 +756,7 @@ mnq/
     app.py             FastAPI webhook + 10-minute scheduler + dashboard API
     dashboard.py       snapshot payloads for the local page
     static/dashboard.html  self-contained page, canvas chart, no CDN
-tests/                 315 tests
+tests/                 342 tests
 ```
 
 ## Tests

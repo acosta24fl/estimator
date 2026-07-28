@@ -3,61 +3,146 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MNQ Dashboard</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%230d1117%22/%3E%3Cpath d=%22M3 12L6 7L9 9L13 4%22 stroke=%22%233fb950%22 stroke-width=%222%22 fill=%22none%22/%3E%3C/svg%3E">
+<title>MNQ Instrument Panel</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23070a0f%22/%3E%3Cpath d=%22M2 13L6 8L9 10L14 3%22 stroke=%22%2300e5c7%22 stroke-width=%222%22 fill=%22none%22/%3E%3C/svg%3E">
 <style>
-  :root{
-    --bg:#0d1117; --panel:#161b22; --line:#30363d; --text:#e6edf3;
-    --dim:#8b949e; --up:#3fb950; --down:#f85149; --accent:#58a6ff;
-    --warn:#d29922;
-  }
-  @media (prefers-color-scheme: light){
-    :root{ --bg:#f6f8fa; --panel:#fff; --line:#d0d7de; --text:#1f2328;
-           --dim:#656d76; --up:#1a7f37; --down:#cf222e; --accent:#0969da;
-           --warn:#9a6700; }
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--text);
-       font:14px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
-  header{display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;
-         padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
-  h1{font-size:16px;margin:0;letter-spacing:.02em}
-  .muted{color:var(--dim);font-size:12px}
-  .wrap{padding:16px 20px;display:grid;gap:16px;
-        grid-template-columns:minmax(0,2.2fr) minmax(260px,1fr)}
-  @media (max-width:900px){ .wrap{grid-template-columns:1fr} }
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px}
-  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;
-           color:var(--dim);margin:0 0 10px}
-  canvas{width:100%;height:auto;display:block}
-  .big{font-size:30px;font-weight:600;line-height:1.1}
-  .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--dim)}
-  .row{display:flex;justify-content:space-between;gap:12px;padding:5px 0;
-       border-bottom:1px solid var(--line)}
-  .row:last-child{border-bottom:0}
-  .row span:first-child{color:var(--dim)}
-  .num{font-variant-numeric:tabular-nums}
-  table{width:100%;border-collapse:collapse;font-size:12px}
-  th,td{text-align:right;padding:5px 6px;border-bottom:1px solid var(--line);
-        font-variant-numeric:tabular-nums}
-  th:first-child,td:first-child{text-align:left}
-  th{color:var(--dim);font-weight:500}
-  .bar{height:5px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:5px}
-  .bar>i{display:block;height:100%;background:var(--accent)}
-  .note{font-size:12px;color:var(--dim);margin-top:8px}
-  .warn{color:var(--warn)}
-  .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;
-        border:1px solid var(--line);color:var(--dim)}
-  .err{color:var(--down);padding:10px 20px}
+/* ------------------------------------------------------------------
+   Design rule for this page: VISUAL WEIGHT ENCODES EVIDENCE.
+   Anything the system cannot statistically support is rendered faint,
+   hatched and desaturated. Full contrast is reserved for measured skill.
+   Most dashboards render every number at equal weight, which is how a
+   confident-looking figure with nothing behind it gets believed.
+   ------------------------------------------------------------------ */
+:root{
+  --bg:#070a0f; --panel:#0d121a; --panel2:#111823; --line:#1e2836;
+  --text:#dfe7f0; --dim:#6b7c93; --faint:#3b4859;
+  --up:#00e5c7; --down:#ff4d6d; --warn:#ffb340; --cool:#5b8dff;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: light){
+  :root{ --bg:#f4f6f9; --panel:#fff; --panel2:#f8fafc; --line:#dbe2ea;
+         --text:#0d1520; --dim:#5b6b80; --faint:#a8b5c4;
+         --up:#00897b; --down:#d13550; --warn:#a86400; --cool:#2a5fd0; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);
+     font:13px/1.5 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* --- header: a status strip, not a nav bar --- */
+header{display:flex;align-items:center;gap:20px;flex-wrap:wrap;
+       padding:12px 22px;border-bottom:1px solid var(--line);
+       background:linear-gradient(180deg,var(--panel2),var(--panel))}
+.tick{font-family:var(--mono);font-size:11px;letter-spacing:.18em;
+      text-transform:uppercase;color:var(--dim)}
+.px{font-family:var(--mono);font-size:32px;font-weight:600;line-height:1;
+    letter-spacing:-.01em}
+.delta{font-family:var(--mono);font-size:14px}
+.spacer{flex:1}
+
+/* --- the alpha badge: the one loud element on the page --- */
+.alpha{display:flex;align-items:center;gap:12px;padding:6px 14px;
+       border:1px solid var(--line);border-radius:2px;background:var(--panel2)}
+.grade{font-family:var(--mono);font-size:26px;font-weight:700;line-height:1;
+       width:34px;text-align:center}
+.g-A{color:var(--up)} .g-B{color:var(--up);opacity:.8}
+.g-C{color:var(--warn)} .g-D{color:var(--warn);opacity:.75}
+.g-F{color:var(--faint)}
+.alpha .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+            color:var(--dim)}
+
+.wrap{padding:14px 22px 40px;display:grid;gap:14px;
+      grid-template-columns:minmax(0,2.4fr) minmax(300px,1fr)}
+@media (max-width:1100px){ .wrap{grid-template-columns:1fr} }
+
+.card{background:var(--panel);border:1px solid var(--line);padding:13px 15px}
+.card+.card{margin-top:14px}
+.card h2{font-size:10px;text-transform:uppercase;letter-spacing:.16em;
+         color:var(--dim);margin:0 0 11px;font-weight:600;
+         display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+canvas{width:100%;height:auto;display:block}
+
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--dim)}
+.warnc{color:var(--warn)}
+
+/* --- horizon ladder: the signature element --- */
+.ladder{display:flex;flex-direction:column;gap:1px}
+.rung{display:grid;grid-template-columns:42px 1fr 74px 52px;align-items:center;
+      gap:10px;padding:7px 8px;background:var(--panel2);
+      border-left:2px solid transparent}
+.rung.skill{border-left-color:var(--cool);background:var(--panel2)}
+.rung.noskill{opacity:.42}
+.rung .h{font-family:var(--mono);font-size:12px;color:var(--dim);
+         letter-spacing:.05em}
+.rung.skill .h{color:var(--text)}
+.rung .dest{font-family:var(--mono);font-size:12px;text-align:right}
+.rung .sk{font-family:var(--mono);font-size:10px;text-align:right;color:var(--dim)}
+/* The band track: a horizontal uncertainty bar with the median as a notch. */
+.track{position:relative;height:16px;background:linear-gradient(
+       to right,transparent,var(--line) 12%,var(--line) 88%,transparent);
+       border-radius:1px}
+.band{position:absolute;top:4px;height:8px;border-radius:1px;opacity:.55}
+.band.wide{opacity:.22;top:6px;height:4px}
+.notch{position:absolute;top:1px;width:2px;height:14px;background:var(--text)}
+.zero{position:absolute;top:0;width:1px;height:16px;background:var(--faint)}
+.hatch{background-image:repeating-linear-gradient(45deg,
+       currentColor 0 2px,transparent 2px 5px)}
+
+/* --- verdict strip --- */
+.verdict{display:flex;align-items:center;gap:12px;padding:10px 12px;
+         background:var(--panel2);border-left:3px solid var(--line)}
+.verdict.continuation{border-left-color:var(--up)}
+.verdict.reversal{border-left-color:var(--down)}
+.verdict.neutral,.verdict.no-signal,.verdict.no-trend{border-left-color:var(--faint)}
+.verdict .v{font-family:var(--mono);font-size:15px;letter-spacing:.06em;
+            text-transform:uppercase;white-space:nowrap}
+.verdict .d{font-size:12px;color:var(--dim)}
+
+/* --- component bars for the alpha breakdown --- */
+.comp{display:grid;grid-template-columns:88px 1fr 38px;align-items:center;
+      gap:9px;padding:3px 0}
+.comp .n{font-size:11px;color:var(--dim);text-transform:uppercase;
+         letter-spacing:.08em}
+.comp .t{height:4px;background:var(--line);overflow:hidden}
+.comp .t>i{display:block;height:100%;background:var(--cool)}
+.comp .v{font-family:var(--mono);font-size:11px;text-align:right;color:var(--dim)}
+
+.row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;
+     border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row span:first-child{color:var(--dim)}
+.row span:last-child{font-family:var(--mono)}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th,td{text-align:right;padding:4px 5px;border-bottom:1px solid var(--line);
+      font-family:var(--mono);font-variant-numeric:tabular-nums}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--dim);font-weight:500;font-family:inherit;font-size:10px;
+   text-transform:uppercase;letter-spacing:.08em}
+.note{font-size:11px;color:var(--dim);margin-top:9px;line-height:1.5}
+.pill{display:inline-block;padding:1px 7px;font-size:10px;letter-spacing:.1em;
+      text-transform:uppercase;border:1px solid var(--line);color:var(--dim)}
+.err{color:var(--down);padding:10px 22px;font-family:var(--mono);font-size:12px}
 </style>
 </head>
 <body>
 <header>
-  <h1 id="sym">MNQ</h1>
-  <span class="big num" id="price">—</span>
-  <span class="num" id="chg">—</span>
-  <span class="muted" id="stamp">connecting…</span>
-  <span class="pill" id="profile"></span>
+  <div>
+    <div class="tick" id="sym">MNQ</div>
+    <div class="px" id="price">—</div>
+  </div>
+  <div class="delta" id="chg">—</div>
+  <div class="spacer"></div>
+  <div class="alpha">
+    <div class="grade g-F" id="grade">—</div>
+    <div>
+      <div class="lbl">alpha</div>
+      <div class="mono" id="ascore" style="font-size:13px">—</div>
+    </div>
+  </div>
+  <div>
+    <div class="tick" id="stamp">connecting…</div>
+    <div class="tick" id="profile" style="color:var(--faint)"></div>
+  </div>
 </header>
 
 <div id="error" class="err" hidden></div>
@@ -65,65 +150,83 @@
 <div class="wrap">
   <div>
     <div class="card">
-      <h2>Price <span id="barcount" class="muted"></span></h2>
-      <canvas id="chart" width="1000" height="440"></canvas>
+      <h2><span>Price &amp; forward cone</span><span id="barcount"></span></h2>
+      <canvas id="chart" width="1200" height="470"></canvas>
       <div class="note" id="chartnote"></div>
     </div>
 
-    <div class="card" style="margin-top:16px">
-      <h2>Confidence calibration — what actually happened after each signal strength</h2>
+    <div class="card">
+      <h2><span>Horizon ladder — destination and uncertainty</span>
+          <span id="ladderhint"></span></h2>
+      <div class="ladder" id="ladder"></div>
+      <div class="note">
+        Each rung is one horizon. The bar is where price landed historically
+        from this exact state: the solid band is the middle half, the faint one
+        the 10th–90th. The notch is the median, the thin line is no change.
+        <b>Rungs with no measurable skill are dimmed and hatched</b> — the
+        forecast is shown, but it is not distinguishable from a random walk.
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Confidence calibration — what followed each signal strength</h2>
       <table id="calib"><thead><tr>
-        <th>Side</th><th>Confidence</th><th>n</th><th>Hit rate</th>
+        <th>Side</th><th>Conf</th><th>n</th><th>Hit</th>
         <th>25th</th><th>Median</th><th>75th</th>
       </tr></thead><tbody></tbody></table>
       <div class="note">
-        Measured on out-of-sample walk-forward predictions. Points are the
-        realised move over the projection horizon, signed so positive favours
-        the side. This is the basis for the projection above — not a model
-        output.
+        Out-of-sample walk-forward predictions. Points are the realised move,
+        signed so positive favours the side.
       </div>
     </div>
   </div>
 
   <div>
     <div class="card">
-      <h2>Projection</h2>
-      <div class="big" id="dir">—</div>
-      <div class="big num" id="pts" style="margin-top:2px">—</div>
-      <div class="muted" id="range"></div>
-      <div class="bar"><i id="confbar" style="width:0%"></i></div>
-      <div class="muted" id="confl" style="margin-top:4px"></div>
+      <h2>Trend read</h2>
+      <div class="verdict" id="verdict">
+        <div class="v" id="vword">—</div>
+      </div>
+      <div class="note" id="vnote"></div>
+      <div style="margin-top:10px" id="vstats"></div>
+    </div>
+
+    <div class="card">
+      <h2>Alpha components</h2>
+      <div id="comps"></div>
+      <div class="note" id="anote"></div>
+    </div>
+
+    <div class="card">
+      <h2>Model projection</h2>
+      <div class="mono" id="dir" style="font-size:22px">—</div>
+      <div class="mono" id="pts" style="font-size:20px">—</div>
       <div class="note" id="projnote"></div>
     </div>
 
-    <div class="card" style="margin-top:16px">
-      <h2>Realised trend</h2>
-      <div id="trend"></div>
-    </div>
-
-    <div class="card" style="margin-top:16px">
+    <div class="card">
       <h2>Levels</h2>
       <div id="levels"></div>
     </div>
 
-    <div class="card" style="margin-top:16px">
+    <div class="card">
       <h2>Indicators</h2>
       <div id="ind"></div>
     </div>
 
-    <div class="card" style="margin-top:16px">
-      <h2>Autopilot <span id="autostate" class="pill"></span></h2>
+    <div class="card">
+      <h2>Autopilot <span class="pill" id="autostate"></span></h2>
       <div id="auto"></div>
       <div class="note" id="autonote"></div>
     </div>
 
-    <div class="card" style="margin-top:16px">
-      <h2>Paper results vs backtest</h2>
+    <div class="card">
+      <h2>Paper vs backtest</h2>
       <div id="paper"></div>
       <div class="note" id="drift"></div>
     </div>
 
-    <div class="card" style="margin-top:16px">
+    <div class="card">
       <h2>Engine</h2>
       <div id="engine"></div>
     </div>
@@ -132,128 +235,233 @@
 
 <script>
 const $ = id => document.getElementById(id);
-const fmt = (v, d=2) => (v === null || v === undefined || Number.isNaN(v))
-  ? "—" : Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
-const signed = (v, d=1) => (v === null || v === undefined) ? "—"
-  : (v > 0 ? "+" : "") + fmt(v, d);
-const cls = v => v > 0 ? "up" : (v < 0 ? "down" : "flat");
-
+const nil = v => v === null || v === undefined || Number.isNaN(v);
+const fmt = (v,d=2) => nil(v) ? "—"
+  : Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+const signed = (v,d=1) => nil(v) ? "—" : (v>0?"+":"")+fmt(v,d);
+const cls = v => nil(v) ? "flat" : (v>0?"up":(v<0?"down":"flat"));
+const css = n => getComputedStyle(document.body).getPropertyValue(n).trim();
 let latest = null;
 
 function rows(target, pairs){
-  $(target).innerHTML = pairs.map(([k, v, c]) =>
-    `<div class="row"><span>${k}</span><span class="num ${c||''}">${v}</span></div>`
-  ).join("") || `<div class="muted">nothing to show</div>`;
+  $(target).innerHTML = pairs.map(([k,v,c]) =>
+    `<div class="row"><span>${k}</span><span class="${c||''}">${v}</span></div>`
+  ).join("") || `<div class="note">nothing to show</div>`;
 }
 
-function drawChart(data, levels){
+/* ---------------- chart with the forward cone ---------------- */
+function drawChart(data, levels, path){
   const cv = $("chart"), ctx = cv.getContext("2d");
-  // Match the backing store to the CSS size so lines stay crisp on HiDPI.
   const dpr = window.devicePixelRatio || 1;
-  const w = cv.clientWidth, h = 440;
-  cv.width = w * dpr; cv.height = h * dpr;
-  cv.style.height = h + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, w, h);
+  const w = cv.clientWidth, h = 470;
+  cv.width = w*dpr; cv.height = h*dpr; cv.style.height = h+"px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
 
-  const bars = (data.bars || []).filter(b => b.o !== null && b.c !== null);
-  if (!bars.length){
-    ctx.fillStyle = getComputedStyle(document.body).getPropertyValue("--dim");
-    ctx.fillText("no bars yet", 12, 24);
+  const bars = (data.bars||[]).filter(b => b.o!==null && b.c!==null);
+  if(!bars.length){
+    ctx.fillStyle = css("--dim"); ctx.font = "12px "+css("--mono");
+    ctx.fillText("waiting for bars…", 14, 26);
     return;
   }
 
-  const padL = 8, padR = 68, padT = 12, padB = 26;
-  const plotW = w - padL - padR, plotH = h - padT - padB;
+  const padL=8, padR=70, padT=12, padB=28;
+  // A third of the width is the future. The cone is not a decoration; it is
+  // the panel's main claim, so it gets real estate.
+  const futureFrac = (path && path.length) ? 0.33 : 0.0;
+  const plotW = w-padL-padR, histW = plotW*(1-futureFrac), coneW = plotW*futureFrac;
+  const plotH = h-padT-padB;
 
-  let lo = Math.min(...bars.map(b => b.l));
-  let hi = Math.max(...bars.map(b => b.h));
-  // Include the projected levels so they are never drawn off-canvas.
-  if (levels) for (const k of ["long_target","long_stop","short_target","short_stop"]){
-    if (levels[k] != null){ lo = Math.min(lo, levels[k]); hi = Math.max(hi, levels[k]); }
+  let lo=Math.min(...bars.map(b=>b.l)), hi=Math.max(...bars.map(b=>b.h));
+  if(levels) for(const k of ["long_target","long_stop","short_target","short_stop"])
+    if(levels[k]!=null){ lo=Math.min(lo,levels[k]); hi=Math.max(hi,levels[k]); }
+  if(path) for(const p of path){
+    if(p.p10!=null) lo=Math.min(lo,p.p10);
+    if(p.p90!=null) hi=Math.max(hi,p.p90);
   }
-  const pad = (hi - lo) * 0.06 || 1;
-  lo -= pad; hi += pad;
+  const pad=(hi-lo)*0.05||1; lo-=pad; hi+=pad;
 
-  const x = i => padL + (i + 0.5) * (plotW / bars.length);
-  const y = p => padT + (hi - p) / (hi - lo) * plotH;
+  const x = i => padL + (i+0.5)*(histW/bars.length);
+  const y = p => padT + (hi-p)/(hi-lo)*plotH;
+  const cLine=css("--line"), cUp=css("--up"), cDown=css("--down"),
+        cDim=css("--dim"), cCool=css("--cool"), cFaint=css("--faint");
 
-  const css = n => getComputedStyle(document.body).getPropertyValue(n).trim();
-  const cLine = css("--line"), cUp = css("--up"), cDown = css("--down"),
-        cDim = css("--dim"), cAcc = css("--accent");
+  ctx.font = "10px "+css("--mono");
+  // Grid + price axis.
+  ctx.strokeStyle=cLine; ctx.fillStyle=cDim; ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const p=lo+(hi-lo)*i/4, yy=Math.round(y(p))+0.5;
+    ctx.globalAlpha=.4; ctx.beginPath();
+    ctx.moveTo(padL,yy); ctx.lineTo(padL+plotW,yy); ctx.stroke(); ctx.globalAlpha=1;
+    ctx.fillText(p.toFixed(0), padL+plotW+7, yy+3);
+  }
 
-  // Grid and price axis.
-  ctx.strokeStyle = cLine; ctx.fillStyle = cDim;
-  ctx.lineWidth = 1; ctx.font = "11px ui-monospace,monospace";
-  for (let i = 0; i <= 4; i++){
-    const p = lo + (hi - lo) * i / 4, yy = Math.round(y(p)) + 0.5;
-    ctx.globalAlpha = .35; ctx.beginPath();
-    ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillText(p.toFixed(0), padL + plotW + 6, yy + 3);
+  // Boundary between measured past and projected future.
+  const nowX = padL+histW;
+  if(coneW>0){
+    ctx.save();
+    ctx.strokeStyle=cFaint; ctx.setLineDash([2,3]); ctx.beginPath();
+    ctx.moveTo(nowX,padT); ctx.lineTo(nowX,padT+plotH); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle=cFaint;
+    ctx.fillText("NOW", nowX+4, padT+10);
   }
 
   // Candles.
-  const bw = Math.max(1, Math.min(11, plotW / bars.length * 0.68));
-  bars.forEach((b, i) => {
-    const up = b.c >= b.o, col = up ? cUp : cDown;
-    const cx = x(i);
-    ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(Math.round(cx) + .5, y(b.h));
-    ctx.lineTo(Math.round(cx) + .5, y(b.l));
-    ctx.stroke();
-    const top = y(Math.max(b.o, b.c)), bot = y(Math.min(b.o, b.c));
-    ctx.fillRect(cx - bw / 2, top, bw, Math.max(1, bot - top));
+  const bw = Math.max(1, Math.min(9, histW/bars.length*0.66));
+  bars.forEach((b,i)=>{
+    const col = b.c>=b.o ? cUp : cDown, cx=x(i);
+    ctx.strokeStyle=col; ctx.fillStyle=col; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(Math.round(cx)+.5,y(b.h));
+    ctx.lineTo(Math.round(cx)+.5,y(b.l)); ctx.stroke();
+    const top=y(Math.max(b.o,b.c)), bot=y(Math.min(b.o,b.c));
+    ctx.fillRect(cx-bw/2, top, bw, Math.max(1,bot-top));
   });
 
   // EMA overlays.
-  const emaColours = { ema21:"#58a6ff", ema50:"#d29922", ema200:"#bc8cff" };
-  for (const [name, series] of Object.entries(data.emas || {})){
-    if (!series || !series.length) continue;
-    ctx.strokeStyle = emaColours[name] || cDim;
-    ctx.lineWidth = 1.4; ctx.beginPath();
-    let started = false;
-    series.forEach((v, i) => {
-      if (v === null) return;
-      const px = x(i), py = y(v);
-      started ? ctx.lineTo(px, py) : (ctx.moveTo(px, py), started = true);
-    });
-    ctx.stroke();
+  const emaCol={ema21:cCool, ema50:css("--warn"), ema200:"#a06bff"};
+  for(const [name,series] of Object.entries(data.emas||{})){
+    if(!series?.length) continue;
+    ctx.strokeStyle=emaCol[name]||cDim; ctx.lineWidth=1.2;
+    ctx.globalAlpha=.75; ctx.beginPath();
+    let started=false;
+    series.forEach((v,i)=>{ if(v===null) return;
+      const px=x(i), py=y(v);
+      started ? ctx.lineTo(px,py) : (ctx.moveTo(px,py), started=true); });
+    ctx.stroke(); ctx.globalAlpha=1;
   }
 
-  // Target / stop levels for the side the projection favours.
-  if (levels){
-    const draw = (val, colour, label) => {
-      if (val == null) return;
-      const yy = Math.round(y(val)) + .5;
-      ctx.save();
-      ctx.strokeStyle = colour; ctx.lineWidth = 1; ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = colour;
-      ctx.fillText(label, padL + 4, yy - 4);
+  // ---- the forward cone ----
+  if(coneW>0 && path.length){
+    const maxMin = Math.max(...path.map(p=>p.minutes));
+    const fx = m => nowX + (m/maxMin)*coneW;
+    const from = bars[bars.length-1].c;
+
+    const ribbon = (key1,key2,alpha,skilledOnly) => {
+      const pts = path.filter(p => skilledOnly ? p.has_skill : !p.has_skill);
+      if(!pts.length) return;
+      ctx.beginPath();
+      ctx.moveTo(nowX, y(from));
+      pts.forEach(p => ctx.lineTo(fx(p.minutes), y(p[key1])));
+      for(let i=pts.length-1;i>=0;i--) ctx.lineTo(fx(pts[i].minutes), y(pts[i][key2]));
+      ctx.closePath();
+      ctx.globalAlpha=alpha;
+      ctx.fillStyle = skilledOnly ? cCool : cFaint;
+      ctx.fill();
+      ctx.globalAlpha=1;
     };
-    const dir = latest?.projection?.direction;
-    if (dir === "up"){
-      draw(levels.long_target, cUp, "target");
-      draw(levels.long_stop, cDown, "stop");
-    } else if (dir === "down"){
-      draw(levels.short_target, cUp, "target");
-      draw(levels.short_stop, cDown, "stop");
+
+    // Skilled horizons: solid ribbons. Unskilled: barely-there, so the eye
+    // is not drawn to a projection the data cannot support.
+    ribbon("p10","p90",0.10,true);
+    ribbon("p25","p75",0.20,true);
+    ribbon("p10","p90",0.05,false);
+    ribbon("p25","p75",0.08,false);
+
+    // Median path.
+    const skilled = path.filter(p=>p.has_skill);
+    if(skilled.length){
+      ctx.strokeStyle=cCool; ctx.lineWidth=1.8; ctx.beginPath();
+      ctx.moveTo(nowX, y(from));
+      skilled.forEach(p=>ctx.lineTo(fx(p.minutes), y(p.median)));
+      ctx.stroke();
+      skilled.forEach(p=>{
+        ctx.fillStyle=cCool;
+        ctx.beginPath(); ctx.arc(fx(p.minutes), y(p.median), 2.6, 0, 7); ctx.fill();
+      });
     }
+    // Unskilled median: dashed and faint.
+    const dull = path.filter(p=>!p.has_skill);
+    if(dull.length){
+      ctx.save();
+      ctx.strokeStyle=cFaint; ctx.lineWidth=1; ctx.setLineDash([3,4]);
+      ctx.globalAlpha=.7; ctx.beginPath(); ctx.moveTo(nowX, y(from));
+      dull.forEach(p=>ctx.lineTo(fx(p.minutes), y(p.median)));
+      ctx.stroke(); ctx.restore();
+    }
+
+    // Horizon ticks along the future axis. Only every other label is drawn
+    // when they would overlap, and they sit above the date row.
+    ctx.fillStyle=cDim;
+    let lastX = -99;
+    path.forEach(p=>{
+      const px = fx(p.minutes);
+      if(px - lastX < 26) return;          // too close to the previous label
+      lastX = px;
+      ctx.globalAlpha = p.has_skill ? 1 : .4;
+      ctx.beginPath(); ctx.moveTo(px, padT+plotH); ctx.lineTo(px, padT+plotH+4);
+      ctx.strokeStyle=cDim; ctx.lineWidth=1; ctx.stroke();
+      ctx.fillText(p.label, px-7, padT+plotH+15);
+      ctx.globalAlpha = 1;
+    });
   }
 
-  // Time axis: first, middle, last.
-  ctx.fillStyle = cDim;
-  [0, Math.floor(bars.length / 2), bars.length - 1].forEach(i => {
-    const t = new Date(bars[i].t);
-    const lbl = t.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit"});
-    const tx = Math.min(Math.max(x(i) - 24, 2), padL + plotW - 60);
-    ctx.fillText(lbl, tx, h - 8);
+  // Target / stop for the model's side.
+  if(levels){
+    const draw=(val,colour,label)=>{
+      if(val==null) return;
+      const yy=Math.round(y(val))+.5;
+      ctx.save(); ctx.strokeStyle=colour; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+      ctx.globalAlpha=.8; ctx.beginPath();
+      ctx.moveTo(padL,yy); ctx.lineTo(nowX,yy); ctx.stroke(); ctx.restore();
+      ctx.fillStyle=colour; ctx.fillText(label, padL+3, yy-3);
+    };
+    const d = latest?.projection?.direction;
+    if(d==="up"){ draw(levels.long_target,cUp,"TP"); draw(levels.long_stop,cDown,"SL"); }
+    else if(d==="down"){ draw(levels.short_target,cUp,"TP"); draw(levels.short_stop,cDown,"SL"); }
+  }
+
+  // Time axis on the history side.
+  ctx.fillStyle=cDim;
+  [0, Math.floor(bars.length/2), bars.length-1].forEach(i=>{
+    const t=new Date(bars[i].t);
+    const lbl=t.toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit"});
+    ctx.fillText(lbl, Math.min(Math.max(x(i)-22,2), nowX-58), h-4);
   });
 }
 
+/* ---------------- horizon ladder ---------------- */
+function drawLadder(hz){
+  if(!hz || !hz.length){
+    $("ladder").innerHTML =
+      `<div class="note">No horizon model yet — it needs a few thousand
+       1-minute bars. Start the autopilot (option 8) and it fills in.</div>`;
+    $("ladderhint").textContent = "";
+    return;
+  }
+  const skilled = hz.filter(f=>f.has_skill).length;
+  $("ladderhint").textContent = `${skilled}/${hz.length} with measurable skill`;
+
+  // One shared axis, signed-square-root scaled. On a linear axis the 24h band
+  // (hundreds of points) squashes the 5m band (a few points) into a flat line;
+  // sqrt keeps every rung readable while still showing the cone widening.
+  const sq = v => Math.sign(v)*Math.sqrt(Math.abs(v));
+  const span = Math.max(...hz.map(f =>
+    Math.max(Math.abs(sq(f.p10_points)), Math.abs(sq(f.p90_points))))) || 1;
+  const pct = v => 50 + (sq(v)/span)*47;
+
+  $("ladder").innerHTML = hz.map(f=>{
+    const ok = f.has_skill;
+    const c = f.median_points>0 ? "var(--up)" : (f.median_points<0 ? "var(--down)" : "var(--dim)");
+    const wide = `left:${pct(Math.min(f.p10_points,f.p90_points))}%;`
+               + `width:${Math.abs(pct(f.p90_points)-pct(f.p10_points))}%;background:${c}`;
+    const mid  = `left:${pct(Math.min(f.p25_points,f.p75_points))}%;`
+               + `width:${Math.abs(pct(f.p75_points)-pct(f.p25_points))}%;background:${c}`;
+    return `<div class="rung ${ok?'skill':'noskill'}" title="${f.note.replace(/"/g,'&quot;')}">
+      <div class="h">${f.label}</div>
+      <div class="track">
+        <div class="zero" style="left:50%"></div>
+        <div class="band wide ${ok?'':'hatch'}" style="${wide}"></div>
+        <div class="band ${ok?'':'hatch'}" style="${mid}"></div>
+        <div class="notch" style="left:${pct(f.median_points)}%"></div>
+      </div>
+      <div class="dest ${cls(f.median_points)}">${signed(f.median_points,0)} pt</div>
+      <div class="sk">${ok ? "skill "+fmt(f.skill,3) : "—"}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------------- render ---------------- */
 function render(d){
   latest = d;
   $("sym").textContent = d.symbol || "MNQ";
@@ -261,168 +469,159 @@ function render(d){
   $("stamp").textContent = "updated " + new Date(d.generated_at).toLocaleTimeString();
 
   const bars = d.chart?.bars || [];
-  $("barcount").textContent = bars.length ? `· ${bars.length} bars` : "";
-  if (bars.length){
-    const last = bars[bars.length - 1], prev = bars[Math.max(0, bars.length - 2)];
-    const ch = last.c - prev.c;
-    $("price").textContent = fmt(last.c, 2);
-    $("chg").textContent = `${signed(ch)} (${signed(100*ch/prev.c, 2)}%)`;
-    $("chg").className = "num " + cls(ch);
+  $("barcount").textContent = bars.length ? `${bars.length} bars` : "";
+  if(bars.length){
+    const last=bars[bars.length-1], prev=bars[Math.max(0,bars.length-2)];
+    const ch=last.c-prev.c;
+    $("price").textContent = fmt(last.c,2);
+    $("chg").textContent = `${signed(ch)}  (${signed(100*ch/prev.c,2)}%)`;
+    $("chg").className = "delta "+cls(ch);
   }
 
-  // ---- projection ----
+  // ---- alpha badge ----
+  const a = d.alpha;
+  if(a){
+    $("grade").textContent = a.grade;
+    $("grade").className = "grade g-"+a.grade;
+    $("ascore").textContent = fmt(a.score,1) + " / 100";
+    const comp = a.components || {};
+    $("comps").innerHTML = Object.entries(comp).map(([k,v])=>
+      `<div class="comp"><div class="n">${k}</div>
+       <div class="t"><i style="width:${Math.round(100*v)}%"></i></div>
+       <div class="v">${fmt(v,2)}</div></div>`).join("");
+    $("anote").textContent = a.note || "";
+    $("anote").className = "note" + (a.tradeable ? "" : " ");
+  } else {
+    $("grade").textContent="—"; $("ascore").textContent="—";
+    $("comps").innerHTML=`<div class="note">no alpha yet</div>`;
+  }
+
+  // ---- trend read ----
+  const t = d.trend_read;
+  if(t){
+    const v = (t.verdict||"unknown").replace(/_/g," ");
+    $("vword").textContent = v.toUpperCase();
+    $("verdict").className = "verdict " + v.replace(/ /g,"-");
+    $("vword").className = "v " + (v==="continuation"?"up":v==="reversal"?"down":"flat");
+    $("vnote").textContent = t.note || "";
+    rows("vstats", [
+      ["state", (t.state||"—").replace(/_/g," ")],
+      ["slope", fmt(t.strength,3)+" ATR/bar", cls(t.strength)],
+      ["volatility", `${t.vol_state||"—"} (${fmt(100*(t.atr_percentile??0),0)}th pct)`],
+      ["continuation", t.continuation_prob!=null
+        ? fmt(100*t.continuation_prob,1)+"%" : "—"],
+      ["vs base rate", t.continuation_edge!=null
+        ? signed(100*t.continuation_edge,1)+"%" : "—",
+        cls(t.continuation_edge)],
+    ]);
+  }
+
+  drawLadder(d.horizons);
+
+  // ---- model projection ----
   const p = d.projection;
-  if (p){
-    const arrow = p.direction === "up" ? "▲ UP" :
-                  p.direction === "down" ? "▼ DOWN" : "— FLAT";
-    $("dir").textContent = arrow;
-    $("dir").className = "big " + (p.direction === "up" ? "up" :
-                                   p.direction === "down" ? "down" : "flat");
-    const mag = Math.abs(p.expected_points);
-    $("pts").textContent = p.basis === "unavailable" ? "—" : `${fmt(mag, 0)} pts`;
-    $("range").textContent = (p.basis === "calibrated")
-      ? `middle half ${signed(p.low_points,0)} to ${signed(p.high_points,0)} pts `
-        + `· over ~${p.horizon_bars} bars`
-      : "";
-    const pct = Math.round((p.confidence || 0) * 100);
-    $("confbar").style.width = pct + "%";
-    $("confl").textContent = `confidence ${fmt(p.confidence,3)}`
-      + (d.gates ? ` · entry gate ${fmt(d.gates.min_probability,2)}` : "")
-      + (p.n_analogues ? ` · ${p.n_analogues} analogues` : "");
+  if(p){
+    $("dir").textContent = p.direction==="up" ? "▲ UP"
+      : p.direction==="down" ? "▼ DOWN" : "— FLAT";
+    $("dir").className = "mono " + (p.direction==="up"?"up":p.direction==="down"?"down":"flat");
+    $("pts").textContent = p.basis==="unavailable" ? "—"
+      : `${fmt(Math.abs(p.expected_points),0)} pts  ·  conf ${fmt(p.confidence,3)}`;
     $("projnote").textContent = p.note || "";
-    $("projnote").className = "note" + (p.basis !== "calibrated" ? " warn" : "");
+    $("projnote").className = "note" + (p.basis!=="calibrated" ? " warnc" : "");
   }
 
-  // ---- realised trend ----
-  const tr = d.trend || {};
-  rows("trend", Object.entries(tr).map(([k, v]) => {
-    const n = k.replace("last_", "");
-    return [`last ${n} bars`, `${signed(v.points,0)} pts (${signed(v.pct,2)}%)`, cls(v.points)];
-  }));
-
-  // ---- levels ----
   const L = d.levels;
   rows("levels", L ? [
-    ["close", fmt(L.close,2)],
-    ["ATR", fmt(L.atr,1)],
-    ["long target", fmt(L.long_target,1), "up"],
-    ["long stop", fmt(L.long_stop,1), "down"],
-    ["short target", fmt(L.short_target,1), "up"],
-    ["short stop", fmt(L.short_stop,1), "down"],
+    ["close", fmt(L.close,2)], ["ATR", fmt(L.atr,1)],
+    ["long TP", fmt(L.long_target,1), "up"], ["long SL", fmt(L.long_stop,1), "down"],
+    ["short TP", fmt(L.short_target,1), "up"], ["short SL", fmt(L.short_stop,1), "down"],
   ] : []);
 
-  // ---- indicators ----
   const ind = d.indicators || {};
-  const order = [
-    ["RSI","rsi",1],["ADX","adx",1],["ATR","atr",1],["ATR %","atr_pct",2],
-    ["MACD hist","macd_hist",3],["Slope 20","slope20",3],
-    ["Trend strength","trend_strength",3],["Rel volume","rel_volume",2],
-    ["VIX pct","vix_percentile",2],["Risk appetite","risk_appetite",2],
-    ["Breadth","breadth",3],
-  ];
-  rows("ind", order.filter(([,k]) => ind[k] !== undefined)
-    .map(([label,k,dp]) => [label, fmt(ind[k], dp),
-      ["macd_hist","slope20","trend_strength","risk_appetite","breadth"].includes(k)
-        ? cls(ind[k]) : ""]));
-
-  // ---- engine ----
-  const e = d.engine || {};
-  rows("engine", Object.keys(e).length ? [
-    ["bars stored", e.bars ?? "—"],
-    ["open trades", e.open_trades ?? 0],
-    ["models", e.models_loaded ? "loaded" : "not loaded"],
-    ["last signal", e.last_signal_at ? new Date(e.last_signal_at).toLocaleTimeString() : "none"],
-  ] : [["state","not running"]]);
+  const order = [["RSI","rsi",1],["ADX","adx",1],["ATR","atr",1],["ATR %","atr_pct",2],
+    ["MACD","macd_hist",3],["Slope","slope20",3],["Trend","trend_strength",3],
+    ["Rel vol","rel_volume",2],["VIX pct","vix_percentile",2],
+    ["Risk app.","risk_appetite",2],["Breadth","breadth",3]];
+  rows("ind", order.filter(([,k])=>ind[k]!==undefined).map(([l,k,dp])=>
+    [l, fmt(ind[k],dp),
+     ["macd_hist","slope20","trend_strength","risk_appetite","breadth"].includes(k)
+       ? cls(ind[k]) : ""]));
 
   // ---- autopilot ----
-  const a = d.autopilot;
-  const st = $("autostate");
-  if (a){
-    const running = a.running;
-    st.textContent = running ? "running · paper" : "stopped";
-    st.style.color = running ? "var(--up)" : "var(--dim)";
-    const s2 = a.state || {};
-    const when = v => v ? new Date(v).toLocaleTimeString() : "never";
+  const ap = d.autopilot, st=$("autostate");
+  if(ap){
+    st.textContent = ap.running ? "running · paper" : "stopped";
+    st.style.color = ap.running ? "var(--up)" : "var(--dim)";
+    const s2 = ap.state||{}, when = v => v ? new Date(v).toLocaleTimeString() : "never";
     rows("auto", [
-      ["polls", `${s2.polls ?? 0}${s2.poll_failures ? ` (${s2.poll_failures} failed)` : ""}`],
+      ["polls", `${s2.polls??0}${s2.poll_failures?` (${s2.poll_failures} failed)`:""}`],
       ["last poll", when(s2.last_poll)],
-      ["signals", s2.signals ?? 0],
-      ["bars stored", (s2.bars ?? 0).toLocaleString()],
-      ["retrains", s2.retrains ?? 0],
-      ["next retrain", s2.next_retrain
-        ? new Date(s2.next_retrain).toLocaleString(undefined,{month:"short",day:"numeric",hour:"2-digit"})
-        : "—"],
+      ["signals", s2.signals??0],
+      ["bars", (s2.bars??0).toLocaleString()],
+      ["retrains", s2.retrains??0],
     ]);
     $("autonote").textContent = s2.retrain_running
-      ? "Retraining now — polling and trade management continue."
-      : (s2.last_error ? "Last error: " + s2.last_error : "");
-    $("autonote").className = "note" + (s2.last_error ? " warn" : "");
+      ? "Retraining — polling and trade management continue."
+      : (s2.last_error ? "Last error: "+s2.last_error : "");
+    $("autonote").className = "note" + (s2.last_error ? " warnc" : "");
   } else {
-    st.textContent = "not started";
-    rows("auto", [["mode", "manual"]]);
-    $("autonote").textContent =
-      "Run MNQ.bat option 8 (or `mnq.cli auto`) for unattended paper trading.";
+    st.textContent="not started";
+    rows("auto",[["mode","manual"]]);
+    $("autonote").textContent="Run MNQ.bat option 8 for unattended paper trading.";
   }
 
-  // ---- paper results ----
-  const pp = a?.paper, dr = a?.drift;
-  if (pp && pp.n){
-    rows("paper", [
-      ["paper trades", pp.n],
-      ["win rate", fmt(100*pp.win_rate,1) + "%"],
-      ["backtest win rate", dr?.baseline_win_rate != null
-        ? fmt(100*dr.baseline_win_rate,1) + "%" : "—"],
-      ["net", "$" + signed(pp.net_usd,2), cls(pp.net_usd)],
-      ["expectancy", "$" + signed(pp.expectancy_usd,2), cls(pp.expectancy_usd)],
-    ]);
-  } else {
-    rows("paper", [["paper trades", 0]]);
-  }
-  if (dr){
-    const tone = {broken:"down", outperforming:"up", consistent:"", "too early":"",
-                  "no baseline":"warn", "no trades yet":""}[dr.verdict] || "";
-    $("drift").innerHTML = `<b class="${tone}">${dr.verdict.toUpperCase()}</b> — ${dr.detail || ""}`;
-  } else {
-    $("drift").textContent = "";
+  const pp = ap?.paper, dr = ap?.drift;
+  rows("paper", (pp && pp.n) ? [
+    ["paper trades", pp.n],
+    ["win rate", fmt(100*pp.win_rate,1)+"%"],
+    ["backtest", dr?.baseline_win_rate!=null ? fmt(100*dr.baseline_win_rate,1)+"%" : "—"],
+    ["net", "$"+signed(pp.net_usd,2), cls(pp.net_usd)],
+    ["expectancy", "$"+signed(pp.expectancy_usd,2), cls(pp.expectancy_usd)],
+  ] : [["paper trades", 0]]);
+  if(dr){
+    const tone = {broken:"down",outperforming:"up","no baseline":"warnc"}[dr.verdict]||"";
+    $("drift").innerHTML = `<b class="${tone}">${(dr.verdict||"").toUpperCase()}</b> — ${dr.detail||""}`;
   }
 
-  // ---- calibration ----
-  const tb = $("calib").querySelector("tbody");
-  const cal = d.calibration || [];
-  tb.innerHTML = cal.length ? cal.map(r => `<tr>
-      <td>${r.side}</td>
-      <td>${fmt(r.lo,2)}–${fmt(r.hi,2)}</td>
-      <td>${r.n}</td>
+  const e = d.engine||{};
+  rows("engine", Object.keys(e).length ? [
+    ["bars stored", (e.bars??0).toLocaleString()],
+    ["open trades", e.open_trades??0],
+    ["models", e.models_loaded ? "loaded" : "not loaded"],
+  ] : [["state","not running"]]);
+
+  const tb = $("calib").querySelector("tbody"), cal = d.calibration||[];
+  tb.innerHTML = cal.length ? cal.map(r=>`<tr>
+      <td>${r.side}</td><td>${fmt(r.lo,2)}–${fmt(r.hi,2)}</td><td>${r.n}</td>
       <td>${fmt(100*r.hit_rate,1)}%</td>
       <td class="${cls(r.p25_points)}">${signed(r.p25_points,0)}</td>
       <td class="${cls(r.median_points)}">${signed(r.median_points,0)}</td>
-      <td class="${cls(r.p75_points)}">${signed(r.p75_points,0)}</td>
-    </tr>`).join("")
-    : `<tr><td colspan="7" class="muted">no calibration yet — run
-       <code>train</code> and <code>backtest</code> first</td></tr>`;
+      <td class="${cls(r.p75_points)}">${signed(r.p75_points,0)}</td></tr>`).join("")
+    : `<tr><td colspan="7" style="color:var(--dim)">no calibration yet — run
+       <code>train</code> then <code>backtest</code></td></tr>`;
 
-  drawChart(d.chart || {}, d.levels);
+  drawChart(d.chart||{}, d.levels, d.path);
   $("chartnote").textContent = bars.length
-    ? "Candles are completed bars only. Dashed lines are the ATR target and stop for the projected side."
+    ? "Left of NOW is measured. Right is projected: solid ribbons are horizons with measured skill, faint ones are shown for completeness only."
     : "";
 }
 
 async function tick(){
   try{
-    const r = await fetch("/api/snapshot", {cache:"no-store"});
-    if (!r.ok) throw new Error(`snapshot returned ${r.status}`);
+    const r = await fetch("/api/snapshot",{cache:"no-store"});
+    if(!r.ok) throw new Error("snapshot "+r.status);
     render(await r.json());
     $("error").hidden = true;
   }catch(err){
-    $("error").hidden = false;
-    $("error").textContent = "Dashboard could not reach the server: " + err.message;
-    $("stamp").textContent = "disconnected";
+    $("error").hidden=false;
+    $("error").textContent = "cannot reach the server: "+err.message;
+    $("stamp").textContent="disconnected";
   }
 }
-
 tick();
 setInterval(tick, 15000);
-window.addEventListener("resize", () => latest && drawChart(latest.chart || {}, latest.levels));
+window.addEventListener("resize", ()=> latest &&
+  drawChart(latest.chart||{}, latest.levels, latest.path));
 </script>
 </body>
 </html>

@@ -133,12 +133,20 @@ def create_app(
             except Exception as exc:  # noqa: BLE001 - the page must still render
                 log.warning("snapshot: live scoring failed (%s)", exc)
 
+        horizons = trend_read = alpha = path = None
+        if _engine is not None:
+            try:
+                horizons, trend_read, alpha, path = _horizon_view(cfg, _engine)
+            except Exception as exc:  # noqa: BLE001 - the page must still render
+                log.warning("snapshot: horizon view failed (%s)", exc)
+
         calibration = _calibration_cache(cfg, matrix)
         payload = dashboard.build_snapshot(
             cfg, matrix, score, project(score, calibration, cfg),
             engine_status=_engine.status() if _engine is not None else None,
             calibration=calibration, limit=bars,
             autopilot=_autopilot.status() if _autopilot is not None else None,
+            horizons=horizons, trend_read=trend_read, alpha=alpha, path=path,
         )
         _cache["at"], _cache["payload"] = now, payload
         return payload
@@ -318,3 +326,44 @@ def _calibration_cache(cfg: Config, matrix):
 
     _CALIBRATION["built_at"], _CALIBRATION["value"] = stamp, value
     return value
+
+
+# ---------------------------------------------------------------- horizons
+
+_HORIZON: dict[str, Any] = {"bars": 0, "model": None}
+
+
+def _horizon_view(cfg: Config, engine):
+    """Multi-horizon forecast, trend read, alpha score and projected path.
+
+    The state->outcome model is rebuilt only when the bar count has moved
+    materially. Rebuilding it on every dashboard poll would scan the whole
+    minute history several times a minute for a table that barely changes.
+    """
+    from ..config import POINT_VALUE_USD, TICK_SIZE
+    from ..models.horizon import (
+        alpha_score, build_horizon_model, forecast, path_payload,
+    )
+
+    minutes = engine.store.minute_frame()
+    if minutes is None or minutes.empty:
+        return [], None, None, []
+
+    n = len(minutes)
+    if _HORIZON["model"] is None or n - _HORIZON["bars"] >= 240:
+        _HORIZON["model"] = build_horizon_model(minutes)
+        _HORIZON["bars"] = n
+
+    forecasts, read = forecast(minutes, _HORIZON["model"])
+
+    # Round-turn cost expressed in points, so alpha compares like with like.
+    cost_points = (
+        cfg.trade.slippage_ticks * TICK_SIZE * 2.0
+        + cfg.trade.commission_usd_per_side * 2.0 / POINT_VALUE_USD
+    )
+    return (
+        [f.to_dict() for f in forecasts],
+        read.to_dict(),
+        alpha_score(forecasts, read, cost_points),
+        path_payload(forecasts),
+    )
