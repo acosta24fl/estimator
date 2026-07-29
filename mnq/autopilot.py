@@ -342,7 +342,8 @@ class Autopilot:
             # Predictions feed the dashboard's calibration table; training the
             # production bundle is a separate, cheaper step done by `train`.
             _, preds, metrics = pooled_walk_forward(
-                self.cfg, n_folds=self.cfg.model.wf_folds, refresh=True
+                self.cfg, n_folds=self.cfg.model.wf_folds, refresh=True,
+                fit_final=True,
             )
             ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
             preds.to_csv(ARTIFACT_DIR / "wf_predictions.csv")

@@ -57,7 +57,9 @@ class _Recorder:
     seen: list[pd.DatetimeIndex] = []
 
     def __init__(self, *a, **k):
-        pass
+        # save_bundle records these alongside the model; the real
+        # DirectionalEnsemble sets them during fit.
+        self.train_stats: dict = {}
 
     def fit(self, X, *a, **k):
         _Recorder.seen.append(X.index)
@@ -226,3 +228,75 @@ class TestFailureModes:
         text = pooled.format_report(metrics)
         assert "POOLED MULTI-INSTRUMENT TRAINING" in text
         assert "MNQ=F" in text
+
+
+class TestTheProductionModelIsActuallySaved:
+    """Pooled training measured an edge and left no model behind.
+
+    ``pooled_walk_forward`` fits a model per fold to *measure* the edge and
+    discards each one - correct, because a fold model has only seen data up to
+    its own cutoff. But nothing then fitted the model that gets used live.
+    Training reported a profitable backtest, wrote its predictions, and never
+    produced ``ensemble.joblib``, so the dashboard said "no trained model"
+    however many times option 3 was run. The failure was completely silent:
+    every number on screen looked right.
+    """
+
+    def test_a_pooled_run_writes_a_loadable_bundle(self, cfg, stubbed, tmp_path):
+        from mnq.models.train import load_bundle
+
+        cfg.model_dir = str(tmp_path / "models")
+        _, _, metrics = pooled.pooled_walk_forward(
+            cfg, pool=("MNQ=F", "ES=F", "YM=F"), n_folds=3, refresh=False,
+            fit_final=True,
+        )
+
+        assert metrics.get("final_model"), metrics.get("final_model_error")
+        assert (tmp_path / "models" / "ensemble.joblib").exists()
+
+        bundle = load_bundle(cfg)
+        assert set(bundle["directions"]) == {"long", "short"}
+        assert bundle["shared_regressor"] is not None
+        assert bundle["feature_names"] == ["tf1h_a", "tf1h_b"]
+
+    def test_it_is_off_by_default_so_evaluation_stays_side_effect_free(
+        self, cfg, stubbed, tmp_path
+    ):
+        cfg.model_dir = str(tmp_path / "models")
+        _, _, metrics = pooled.pooled_walk_forward(
+            cfg, pool=("MNQ=F", "ES=F", "YM=F"), n_folds=3, refresh=False,
+        )
+        assert "final_model" not in metrics
+        assert not (tmp_path / "models" / "ensemble.joblib").exists()
+
+    def test_the_final_fit_uses_every_pooled_row(self, cfg, stubbed, tmp_path):
+        """Unlike the fold models, this one trains on all history.
+
+        That is right for a production model and wrong for measurement, which
+        is exactly why they are separate code paths.
+        """
+        common = ["tf1h_a", "tf1h_b"]
+        bundle = pooled.fit_pooled_bundle(stubbed, common, cfg)
+
+        total = sum(len(d["features"]) for d in stubbed.values())
+        assert bundle["pooled_rows"] == total
+        assert bundle["pool"] == sorted(stubbed)
+
+    def test_a_failed_final_fit_does_not_discard_the_walk_forward(
+        self, cfg, stubbed, tmp_path, monkeypatch
+    ):
+        """An hour of evaluation must survive a broken production fit."""
+        cfg.model_dir = str(tmp_path / "models")
+
+        def boom(*a, **k):
+            raise RuntimeError("out of memory")
+
+        monkeypatch.setattr(pooled, "fit_pooled_bundle", boom)
+        _, preds, metrics = pooled.pooled_walk_forward(
+            cfg, pool=("MNQ=F", "ES=F", "YM=F"), n_folds=3, refresh=False,
+            fit_final=True,
+        )
+
+        assert "out of memory" in metrics["final_model_error"]
+        assert metrics.get("long_auc") is not None, "the evaluation must survive"
+        assert not preds.empty

@@ -34,6 +34,7 @@ from ..config import Config
 from ..labeling import LONG, SHORT
 from .crossval import _safe_auc, prepare_instrument
 from .ensemble import DirectionalEnsemble, SharedRegressor
+from .train import save_bundle
 
 log = logging.getLogger(__name__)
 
@@ -51,6 +52,7 @@ def pooled_walk_forward(
     context: dict[str, pd.DataFrame] | None = None,
     n_folds: int = 5,
     refresh: bool = True,
+    fit_final: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """Expanding walk-forward on ``target``, trained on every instrument.
 
@@ -191,7 +193,88 @@ def pooled_walk_forward(
             )
             metrics[f"{name}_n"] = int(len(sub))
 
+    if fit_final:
+        try:
+            bundle = fit_pooled_bundle(loaded, common, cfg)
+            path = save_bundle(bundle, cfg)
+            metrics["final_model"] = str(path)
+            log.info("pooled production model saved -> %s", path)
+        except Exception as exc:  # noqa: BLE001 - the evaluation still stands
+            # Losing the production fit must not discard the walk-forward
+            # numbers that took an hour to produce.
+            metrics["final_model_error"] = f"{type(exc).__name__}: {exc}"
+            log.exception("could not fit the pooled production model")
+
     return tgt["matrix"], predictions, metrics
+
+
+def fit_pooled_bundle(
+    loaded: dict[str, dict[str, Any]], common: list[str], cfg: Config
+) -> dict[str, Any]:
+    """Fit the production models on every pooled row, for live scoring.
+
+    This is the step that was missing, and its absence was silent in the worst
+    way. ``pooled_walk_forward`` fits a model per fold to *measure* the edge and
+    throws each one away, which is correct - a fold model has only seen data up
+    to its own cutoff. But nothing then fitted the model that actually gets
+    used. Pooled training wrote its predictions and metrics, reported a
+    profitable backtest, and left no ``ensemble.joblib`` behind, so the
+    dashboard kept saying "no trained model" however many times it was run.
+
+    Unlike the fold models this one trains on *all* history with no cutoff.
+    That is right for a production model and wrong for measurement, which is
+    exactly why the two are separate: every number quoted about this system
+    comes from the fold models above, never from this one.
+    """
+    features = pd.concat([d["features"][common] for d in loaded.values()])
+    fwd = pd.concat([d["fwd"] for d in loaded.values()])
+
+    reg_mask = fwd.notna()
+    if reg_mask.sum() < 500:
+        raise RuntimeError(
+            f"only {int(reg_mask.sum())} pooled rows have a forward return; "
+            f"not enough to fit a production model"
+        )
+    reg = SharedRegressor(cfg.model.reg_params).fit(
+        features[reg_mask], fwd[reg_mask].to_numpy(float)
+    )
+
+    bundle: dict[str, Any] = {
+        "feature_names": list(common),
+        "trained_at": pd.Timestamp.now("UTC").isoformat(),
+        "config": cfg.to_dict(),
+        "pool": sorted(loaded),
+        "pooled_rows": int(len(features)),
+        "shared_regressor": reg,
+        "directions": {},
+    }
+
+    for direction in (LONG, SHORT):
+        name = DIRECTION_NAMES[direction]
+        X_parts, y_parts, f_parts = [], [], []
+        for d in loaded.values():
+            lab = d["labels"][direction]
+            mask = lab["label"].notna()
+            if mask.sum() < 100:
+                continue
+            X_parts.append(d["features"].loc[mask, common])
+            y_parts.append(lab.loc[mask, "label"].to_numpy(int))
+            f_parts.append(d["fwd"][mask].to_numpy(float))
+
+        if not X_parts:
+            raise RuntimeError(f"no labelled pooled rows for the {name} model")
+
+        X = pd.concat(X_parts)
+        y = np.concatenate(y_parts)
+        f = np.concatenate(f_parts)
+        if len(np.unique(y)) < 2:
+            raise RuntimeError(f"the pooled {name} labels are all one class")
+
+        ens = DirectionalEnsemble(direction, cfg.model).fit(X, y, f)
+        bundle["directions"][name] = ens
+        log.info("pooled final %s model: %d rows", name, len(X))
+
+    return bundle
 
 
 def format_report(metrics: dict[str, Any]) -> str:

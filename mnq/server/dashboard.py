@@ -174,10 +174,14 @@ def readiness(
         "detail": (
             "The direction model is loaded and scoring."
             if trained else
-            "No trained model exists, so the system cannot give a direction. "
-            "Everything else on this page still works."
+            "No trained model file exists yet, so the system cannot give a "
+            "direction. Everything else on this page still works. Training "
+            "once is enough — running it again does not improve it, it just "
+            "refits the same data."
         ),
-        "fix": "" if trained else "Run option 3 (train + backtest) once.",
+        # "Run option 3 once" was read as "you have run option 3 once", which
+        # is the opposite of the instruction. Say what is missing instead.
+        "fix": "" if trained else "Run option 3 — no model file exists yet.",
     })
 
     scored = score is not None

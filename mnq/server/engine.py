@@ -297,6 +297,20 @@ class LiveEngine:
         missing = [c for c in names if c not in matrix.columns]
         if missing:
             log.error("live matrix missing %d features (e.g. %s)", len(missing), missing[:5])
+            # Almost always a profile mismatch: a model trained on hourly bars
+            # being served against 5-minute features, or the reverse. Every
+            # feature name is missing at once and the page just shows no
+            # direction, so say which two things disagree.
+            self.journal.record(
+                "error",
+                f"The model cannot read the current data: {len(missing)} of "
+                f"{len(names)} features it needs are not being built (e.g. "
+                f"{', '.join(missing[:3])}). This is a timeframe mismatch — the "
+                f"model was trained on a different profile than this page is "
+                f"running. Restart the dashboard so it picks the matching one.",
+                missing=len(missing), expected=len(names),
+                examples=missing[:5], profile=self.cfg.data.profile,
+            )
             return None
 
         row = matrix.iloc[[-1]]

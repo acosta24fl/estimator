@@ -226,6 +226,10 @@ def _train_pooled(args, cfg: Config) -> int:
     matrix, preds, metrics = pooled_walk_forward(
         cfg, pool=pool, context=context,
         n_folds=cfg.model.wf_folds, refresh=not args.no_refresh,
+        # Without this the run measures an edge, reports it, and leaves no
+        # model behind - so the dashboard and the autopilot stay blank no
+        # matter how many times training is run.
+        fit_final=not args.skip_final,
     )
 
     out = ARTIFACT_DIR
@@ -238,6 +242,12 @@ def _train_pooled(args, cfg: Config) -> int:
     print()
     print(format_report(metrics))
     print(f"\nPredictions -> {out / 'wf_predictions.csv'}")
+    if metrics.get("final_model"):
+        print(f"Live model  -> {metrics['final_model']}")
+        print("The dashboard picks this up on its own within a minute.")
+    elif metrics.get("final_model_error"):
+        print(f"\n  [!] The walk-forward numbers above are valid, but the live "
+              f"model could not be fitted:\n      {metrics['final_model_error']}")
     print("Run `python -m mnq.cli backtest` next to price them after costs.")
     return 0
 
@@ -643,6 +653,28 @@ def cmd_ingest(args, cfg: Config) -> int:
     return 0
 
 
+def _trained_profile(cfg: Config, default: str = "wide") -> str:
+    """The timeframe profile the saved model expects.
+
+    Read from the bundle's own metadata rather than assumed, so a model trained
+    on one profile can never be served against features built for another.
+    Falls back to ``wide`` because that is what option 3 (pooled training)
+    produces, and it is the only training path the menu offers.
+    """
+    meta = cfg.path("model_dir") / "ensemble_meta.json"
+    try:
+        import joblib
+
+        bundle = joblib.load(cfg.path("model_dir") / "ensemble.joblib")
+        profile = bundle.get("config", {}).get("data", {}).get("profile")
+        if profile in ("intraday", "wide"):
+            return profile
+    except Exception:  # noqa: BLE001 - no model yet is the normal first run
+        pass
+    logging.debug("no model profile found at %s; defaulting to %s", meta, default)
+    return default
+
+
 def _port_is_free(host: str, port: int) -> bool:
     """Can we bind ``port``, or is something already there?
 
@@ -700,6 +732,14 @@ def cmd_dashboard(args, cfg: Config) -> int:
     from .server.app import create_app
     from .server.engine import LiveEngine
 
+    # Match the profile the saved model was trained on. A pooled model is
+    # trained on hourly bars (tf1h_/tf4h_/tf1d_ features); serving the page on
+    # the intraday profile builds tf5_/tf15_ features instead, so *every*
+    # feature name the model wants is missing and scoring silently returns
+    # nothing. The page then shows a live feed, a full chart and no direction,
+    # with the cause visible only in a log line nobody is reading.
+    if getattr(args, "profile", None) is None:
+        args.profile = _trained_profile(cfg)
     _apply_profile(args, cfg)
     cfg.server.host, cfg.server.port = args.host, args.port
     if _refuse_busy_port(args.host, args.port, "the dashboard"):
