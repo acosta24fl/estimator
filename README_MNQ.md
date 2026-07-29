@@ -85,6 +85,32 @@ round-turn cost — 3.5% of the move, versus 8.7% at 10 points.
 **Windows:** double-click `MNQ.bat`. It installs what it needs on first run and
 then shows a menu. There is no separate setup step.
 
+### Get the code with `git clone`, not as a zip
+
+```bash
+cd %USERPROFILE%\Desktop
+git clone https://github.com/acosta24fl/estimator.git mnq
+cd mnq
+```
+
+This is worth doing properly once. Downloading a zip per update produces a
+sprawl of `mnqtradingsystem (11)` folders, none of which is a git checkout — so
+patches cannot be applied, changes cannot be pushed, and it is never obvious
+which folder is the one actually running. One clone removes all of that.
+
+Updating afterwards is one action: **drag the `.patch` file onto `UPDATE.bat`**.
+It refuses to run outside a clone or on a dirty tree, pulls first, applies,
+pushes, and explains itself if any step fails. Or by hand:
+
+```bash
+git pull --ff-only
+git am the-update.patch
+git push
+```
+
+Switching folders costs nothing: the price history, models and results live in
+`MNQ_HOME` (`%USERPROFILE%\mnq-data`), not in the checkout.
+
 **Everything else:**
 
 ```bash

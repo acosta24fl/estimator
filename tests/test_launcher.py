@@ -1,8 +1,14 @@
-"""Static checks on MNQ.bat.
+"""Static checks on the .bat files.
 
-The launcher is the one file that never runs in CI - it only ever executes on
-the user's Windows box, where a mistake costs a round trip. These tests catch
-the failure modes that are invisible when reading the file on Linux.
+These are the only files that never run in CI - they execute exclusively on
+the user's Windows box, where a mistake costs a round trip measured in hours.
+These tests catch the failure modes that are invisible when reading the files
+on Linux.
+
+Two files are covered. MNQ.bat is the launcher. UPDATE.bat applies a patch,
+and it carries a particular obligation: it is the script that runs *when
+something is already wrong*, so it has to fail legibly rather than half-apply
+an update and leave the checkout in a state the user cannot describe.
 """
 
 import re
@@ -10,12 +16,23 @@ from pathlib import Path
 
 import pytest
 
-BAT = Path(__file__).resolve().parent.parent / "MNQ.bat"
+ROOT = Path(__file__).resolve().parent.parent
+BAT = ROOT / "MNQ.bat"
+UPDATE = ROOT / "UPDATE.bat"
+
+
+def _lines(path):
+    return path.read_text(encoding="utf-8", errors="replace").splitlines()
 
 
 @pytest.fixture(scope="module")
 def lines():
-    return BAT.read_text(encoding="utf-8", errors="replace").splitlines()
+    return _lines(BAT)
+
+
+@pytest.fixture(scope="module")
+def update_lines():
+    return _lines(UPDATE)
 
 
 def _strip_comment(line):
@@ -141,3 +158,71 @@ def test_paths_with_spaces_and_parentheses_are_quoted(lines):
         "path variable used unquoted - breaks on spaces and parentheses:\n"
         + "\n".join(unquoted)
     )
+
+
+class TestUpdater:
+    """UPDATE.bat runs when something is already wrong. It must fail legibly."""
+
+    def test_it_does_not_repeat_the_parse_time_expansion_bug(self, update_lines):
+        """The same trap that broke MNQ.bat, checked on the new file too."""
+        test_no_variable_read_in_the_block_that_sets_it(update_lines)
+
+    def test_every_goto_has_a_label(self, update_lines):
+        test_every_goto_has_a_label(update_lines)
+
+    def test_it_refuses_to_run_outside_a_clone(self, update_lines):
+        """The actual failure: running from an extracted zip, not a checkout.
+
+        Without this check `git am` prints "not a git repository" and the user
+        is left guessing. The script has to name the cause and give the clone
+        command.
+        """
+        text = "\n".join(update_lines)
+        assert "git rev-parse --git-dir" in text
+        assert "not a git checkout" in text
+        assert "git clone" in text
+
+    def test_it_says_the_data_survives_switching_folders(self, update_lines):
+        """The reason someone would hesitate to move folders is losing work.
+
+        The models and price history live under MNQ_HOME, not in the checkout,
+        so nothing is lost - but that has to be said at the moment the user is
+        being asked to switch.
+        """
+        text = "\n".join(update_lines)
+        assert "mnq-data" in text and "Nothing is lost" in text
+
+    def test_a_dirty_tree_is_refused_before_anything_is_touched(self, update_lines):
+        """A half-applied patch over local edits is the worst outcome."""
+        text = "\n".join(update_lines)
+        assert "git diff --quiet" in text
+        assert ":dirty" in text
+        assert "git stash" in text
+
+    def test_a_failed_apply_is_rolled_back(self, update_lines):
+        text = "\n".join(update_lines)
+        assert text.count("git am --abort") >= 2, (
+            "abort before applying (clearing an earlier half-run) and after a "
+            "failure (leaving the checkout clean)"
+        )
+
+    def test_quotes_from_a_dragged_path_are_stripped(self, update_lines):
+        """Dragging a path with spaces into a console wraps it in quotes."""
+        text = "\n".join(update_lines)
+        assert 'set "PATCHFILE=%PATCHFILE:"=%"' in text
+
+    def test_it_pulls_before_applying(self, update_lines):
+        """Applying onto a stale checkout is the most likely way this fails."""
+        text = "\n".join(update_lines)
+        assert "git pull --ff-only" in text
+        assert text.index("git pull --ff-only") < text.index('git am "%PATCHFILE%"')
+
+    def test_every_exit_path_pauses(self, update_lines):
+        """Double-clicked scripts close instantly; an unpaused error is unread."""
+        exits = [n for n, l in enumerate(update_lines) if l.strip().startswith("exit /b")]
+        for n in exits:
+            window = "\n".join(update_lines[max(0, n - 4):n])
+            assert "pause" in window, (
+                f"line {n + 1}: `exit /b` with no `pause` above it - the window "
+                f"would vanish before the message could be read"
+            )
