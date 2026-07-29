@@ -130,6 +130,7 @@ echo   7  Open the dashboard      (live prices, updates itself, watch only)
 echo   8  AUTOPILOT               (same page + records simulated trades)
 echo   9  Show status
 echo  10  Run the tests
+echo  11  Time-of-day profile   (bar size by clock - free, instant)
 echo.
 echo   0  Exit
 echo.
@@ -145,6 +146,7 @@ if "%CHOICE%"=="7" goto :do_dashboard
 if "%CHOICE%"=="8" goto :do_auto
 if "%CHOICE%"=="9" goto :do_status
 if "%CHOICE%"=="10" goto :do_tests
+if "%CHOICE%"=="11" goto :do_clock
 if "%CHOICE%"=="0" exit /b 0
 echo   Not a valid choice.
 goto :menu
@@ -305,6 +307,36 @@ echo   Train a model first (option 3) or it can only collect bars. If you
 echo   train while it is running it picks the new model up on its own.
 echo.
 start "MNQ autopilot" cmd /k ""%VPY%" -m mnq.cli auto --open"
+goto :done
+
+:do_clock
+echo.
+echo   How big bars are, and how price behaves, at each time of day.
+echo.
+echo   Every bar's range is divided by the median bar of its OWN day, so
+echo   2.40x at 09:30 means the opening bar is typically two and a half
+echo   times a normal bar that day - comparable across years and across
+echo   quiet and violent regimes.
+echo.
+echo   Use it for stop distance and position sizing by hour. Direction is
+echo   tested too, but corrected for screening every slot at once: a slot
+echo   is only starred if its edge survives that. Usually none do, and
+echo   that is the honest answer rather than a disappointing one.
+echo.
+echo   Free and instant - it reads bars already on disk.
+echo.
+set "CLKTF="
+set /p CLKTF=  Bar size in minutes [Enter for 30]:
+if "%CLKTF%"=="" set "CLKTF=30"
+set "CLKSLOT="
+set /p CLKSLOT=  Also track one slot across time, e.g. 09:30 [Enter to skip]:
+echo.
+if "%CLKSLOT%"=="" goto :clock_run
+"%VPY%" -m mnq.cli clock --timeframes %CLKTF% --slot %CLKSLOT%
+goto :done
+
+:clock_run
+"%VPY%" -m mnq.cli clock --timeframes %CLKTF%
 goto :done
 
 :do_status

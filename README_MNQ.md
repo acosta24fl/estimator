@@ -47,7 +47,7 @@ So the constraint really was sample size. Training now
 **What remains unproven is profit.** AUC 0.578 is a small edge, and small
 edges die to costs. Read the PROFITABILITY block, not the backtest total.
 
-What has been verified is the machinery: 382 tests pass, including the lookahead
+What has been verified is the machinery: 434 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -655,6 +655,74 @@ found something to say every minute would be the broken one.
 
 ---
 
+## Time-of-day profile
+
+```bash
+python -m mnq.cli clock --timeframes 30 --slot 09:30    # or MNQ.bat -> option 11
+```
+
+How big bars are, and how price behaves, at each time of day. Free, instant,
+and it reads bars already on disk.
+
+**The core measurement is a ratio, not a point count.** Raw range is not
+comparable across time — MNQ moved twice as much in 2022 as in 2024 — so every
+bar's range is divided by the median range of *its own day*:
+
+```
+size_ratio = bar_range / median(all bar ranges that day)
+```
+
+`2.81x` at 09:30 means the opening bar is typically two and a half times a
+normal bar that day, whatever "normal" was that year. Scale-free, regime-free,
+and directly usable: it says how wide a stop has to be at that hour relative to
+any other. On real MNQ 30-minute bars:
+
+```
+  slot        n    size    range   body    up%  vs base   cont%
+  10:00      21   2.91x      141   0.42  52.4%    +1.4%   47.6%
+  09:30      20   2.81x      132   0.51  50.0%    -1.0%   55.0%
+  ...
+  22:00      20   0.63x       29   0.42  55.0%    +4.0%   45.0%
+
+  21 sessions at 30m. Shape reproduces across the two halves of history
+  at rho=0.94 — stable. No slot shows a directional edge that survives
+  correction, which is the expected and honest result.
+```
+
+**Why size and direction are treated completely differently.** Intraday
+volatility seasonality is one of the few genuinely robust effects in index
+futures — the cash open, the European close and the last half hour print bigger
+bars every year, in every regime, because of when participants are present.
+Direction by clock is not like that at all. Screening thirteen slots at p<0.05
+hands you a false positive on roughly a quarter of runs. So every directional
+claim is tested against the instrument's **own base rate** (not 50%) and then
+corrected across all slots with **Benjamini-Hochberg** at a 10% false discovery
+rate. A slot is starred only if it survives. Usually none do, and the report
+says so in those words rather than printing raw p-values and letting the reader
+draw the flattering conclusion.
+
+**Stability is measured, not assumed.** History is split in half and the two
+slot profiles are correlated. A real clock effect reproduces (rho 0.94 above); a
+fitted one does not, and the profile is then labelled *NOT stable, treat as
+descriptive*.
+
+`--slot 09:30` additionally writes that slot's session-by-session history and
+reports whether it is drifting — comparing the last 20 sessions to everything
+before, as a ratio of medians rather than a fitted slope, because a slope on 20
+noisy points is mostly a statement about its two endpoints.
+
+The command picks its own data source: it needs bars at least as fine as the
+timeframe asked for, and among those it takes whichever has the most sessions.
+Preferring the finest source unconditionally profiled three weeks of 1-minute
+history while two years of hourly bars sat on disk.
+
+| Timeframe | Needs |
+| --- | --- |
+| 60m | the `wide` cache (~730 days) — best sample by far |
+| 30m / 15m / 5m | `fetch --profile intraday` (5m, ~60 days), or a filled 1-minute store |
+
+---
+
 ## Going live
 
 ```bash
@@ -881,6 +949,7 @@ mnq/
   notify/telegram.py   message formatting and delivery
   models/projection.py calibrated direction + expected move in points
   models/horizon.py    multi-horizon forecasts, skill scoring, alpha grade
+  models/clock.py      time-of-day bar size and behaviour, FDR-corrected
   journal.py           the decision log: every action, in plain English
   paper.py             simulated-trade journal + live-vs-backtest drift test
   autopilot.py         the polling loop; watch-only or paper trading
@@ -889,7 +958,7 @@ mnq/
     app.py             FastAPI webhook + 10-minute scheduler + dashboard API
     dashboard.py       snapshot payloads, readiness checks, for the local page
     static/dashboard.html  self-contained page, canvas chart, no CDN
-tests/                 382 tests
+tests/                 434 tests
 ```
 
 ## Tests

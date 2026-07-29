@@ -19,6 +19,7 @@ import argparse
 import json
 import logging
 import sys
+from typing import Any
 from pathlib import Path
 
 import pandas as pd
@@ -653,6 +654,125 @@ def cmd_ingest(args, cfg: Config) -> int:
     return 0
 
 
+def cmd_clock(args, cfg: Config) -> int:
+    """Profile bar size and behaviour by time of day.
+
+    Reads the finest bars available - the live 1-minute store first, then the
+    cached series - because a 30-minute profile cannot be built from hourly
+    bars, and the wide profile's cache is hourly.
+    """
+    from .models.clock import (
+        build_clock_profile, format_report, slot_history, slot_trend,
+    )
+
+    finest = min(args.timeframes)
+    bars, source = _clock_bars(cfg, finest)
+    if bars is None or bars.empty:
+        print(f"\n  No bars fine enough for a {finest}-minute profile.")
+        print("  The wide profile caches hourly bars, which can only answer")
+        print("  60-minute questions. Either:")
+        print(f"    python -m mnq.cli clock --timeframes 60")
+        print("    python -m mnq.cli fetch --profile intraday   (5m, ~60 days)")
+        print("  or leave the dashboard running so the 1-minute store fills.\n")
+        return 1
+
+    span = f"{bars.index[0]:%Y-%m-%d} .. {bars.index[-1]:%Y-%m-%d}"
+    print(f"\n  Source: {source}")
+    print(f"  {len(bars):,} bars, {span}")
+
+    out = ARTIFACT_DIR
+    out.mkdir(parents=True, exist_ok=True)
+    payloads: dict = {}
+
+    for minutes in args.timeframes:
+        profile = build_clock_profile(
+            bars, minutes=minutes, tz=args.tz,
+            min_observations=args.min_observations,
+        )
+        print()
+        print(format_report(profile, top=args.top))
+        payloads[str(minutes)] = profile.to_dict()
+
+    (out / "clock_profile.json").write_text(json.dumps(payloads, indent=2, default=float))
+    print(f"\n  Saved -> {out / 'clock_profile.json'}")
+
+    if args.slot:
+        history = slot_history(bars, args.slot, minutes=args.timeframes[0], tz=args.tz)
+        if history.empty:
+            print(f"\n  No bars at {args.slot} on the {args.timeframes[0]}m grid.")
+            return 0
+        path = out / f"clock_slot_{args.slot.replace(':', '')}.csv"
+        history.to_csv(path)
+        trend = slot_trend(history, window=args.window)
+        print(f"\n  === {args.slot} across {len(history)} sessions ===")
+        print(f"  typical size   : {history['size_ratio'].median():.2f}x a normal bar")
+        print(f"  typical range  : {history['range_points'].median():.0f} points")
+        print(f"  biggest        : {history['range_points'].max():.0f} points "
+              f"on {history['range_points'].idxmax():%Y-%m-%d}")
+        print(f"  drift          : {trend.get('note', 'not enough sessions')}")
+        print(f"  Saved -> {path}")
+    return 0
+
+
+#: Cached-series suffix -> bar interval in minutes.
+_CACHE_INTERVALS = {"1m": 1, "5m": 5, "15m": 15, "30m": 30, "1h": 60, "4h": 240}
+
+
+def _clock_bars(cfg: Config, finest_minutes: int):
+    """The best available bars for a clock profile at ``finest_minutes``.
+
+    Two things are in tension and picking either one alone gets it wrong.
+    Resolution: a 30-minute profile cannot be built from hourly bars at all.
+    Coverage: the live 1-minute store holds a few weeks, while the hourly cache
+    holds two years, and a slot measured over 20 sessions is a description of
+    those 20 days rather than a profile.
+
+    So: filter to the sources fine enough to answer the question, then take the
+    one with the most sessions. Preferring the finest source unconditionally
+    silently profiled three weeks of history when two years were sitting on
+    disk.
+    """
+    from .data.store import BarStore
+
+    candidates: list[tuple[int, int, str, Any]] = []   # (days, -interval, label, frame)
+
+    def consider(frame, interval: int, label: str) -> None:
+        if frame is None or frame.empty or interval > finest_minutes:
+            return
+        idx = frame.index
+        if idx.tz is None:
+            idx = idx.tz_localize("UTC")
+        days = int(pd.Series(idx.tz_convert("UTC").normalize()).nunique())
+        candidates.append((days, -interval, label, frame))
+
+    store = BarStore(cfg.path(cfg.server.bar_store_path), cfg.server.max_bars_retained)
+    if len(store):
+        consider(store.minute_frame(), 1, f"live 1-minute store ({len(store):,} bars)")
+
+    cache = cfg.path(cfg.data.cache_dir)
+    if cache.exists():
+        stem = cfg.data.symbol.replace("=", "")
+        for path in sorted(cache.glob("*.csv")):
+            suffix = path.stem.rsplit("_", 1)[-1]
+            interval = _CACHE_INTERVALS.get(suffix)
+            if interval is None or stem not in path.stem:
+                continue
+            try:
+                frame = pd.read_csv(path, index_col=0, parse_dates=True)
+                frame.index = pd.to_datetime(frame.index, utc=True)
+            except Exception as exc:  # noqa: BLE001 - a bad cache file is skippable
+                logging.debug("clock: could not read %s (%s)", path.name, exc)
+                continue
+            consider(frame, interval, f"{path.name} ({len(frame):,} bars)")
+
+    if not candidates:
+        return None, ""
+    candidates.sort(reverse=True)
+    days, neg_interval, label, frame = candidates[0]
+    logging.info("clock: using %s — %d sessions at %dm", label, days, -neg_interval)
+    return frame, label
+
+
 def _trained_profile(cfg: Config, default: str = "wide") -> str:
     """The timeframe profile the saved model expects.
 
@@ -1142,6 +1262,33 @@ def build_parser() -> argparse.ArgumentParser:
                     help="retrain once at startup before settling into the cadence")
     sp.add_argument("--open", action="store_true", help="open the dashboard")
     sp.set_defaults(func=cmd_auto)
+
+    sp = sub.add_parser(
+        "clock",
+        help="profile bar size and behaviour by time of day",
+        description=(
+            "How big bars are, and how price behaves, at each time of day. "
+            "Bar range is divided by the median bar of its own day, so the "
+            "numbers are comparable across years and volatility regimes: 2.4x "
+            "at 09:30 means the opening bar is typically two and a half times "
+            "a normal bar that day. Directional claims are tested against the "
+            "instrument's own base rate and corrected for screening every "
+            "slot, so a slot is only starred if its edge survives that."
+        ),
+    )
+    sp.add_argument("--timeframes", type=int, nargs="+", default=[30],
+                    metavar="M", help="bar sizes in minutes (default: 30)")
+    sp.add_argument("--tz", default="America/New_York",
+                    help="session timezone the clock is measured in")
+    sp.add_argument("--slot", default=None, metavar="HH:MM",
+                    help="also write one slot's history, e.g. 09:30")
+    sp.add_argument("--window", type=int, default=20,
+                    help="recent sessions used for the drift check (default: 20)")
+    sp.add_argument("--min-observations", type=int, default=30,
+                    help="minimum bars before a slot is reported (default: 30)")
+    sp.add_argument("--top", type=int, default=0,
+                    help="show only the N largest slots (default: all)")
+    sp.set_defaults(func=cmd_clock)
 
     sp = sub.add_parser("status", help="show cached data, models and live state")
     sp.set_defaults(func=cmd_status)

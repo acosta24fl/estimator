@@ -108,14 +108,22 @@ def test_every_goto_has_a_label(lines):
 
 
 def test_every_menu_choice_is_wired_up(lines):
-    """A number offered in the menu must be dispatched, and vice versa."""
+    """A number offered in the menu must be dispatched, and vice versa.
+
+    The patterns match one *or two* digits. They previously matched a single
+    digit only, so option 10 was invisible to this test in both directions -
+    it could have been offered and not dispatched, or dropped from the menu
+    while still dispatched, and nothing here would have noticed.
+    """
     text = "\n".join(lines)
 
-    offered = set(re.findall(r"^\s*echo\s+(\d)\s{2,}\S", text, re.MULTILINE))
-    offered |= set(re.findall(r"^\s*echo\s+(\d)\s+\w", text, re.MULTILINE))
-    dispatched = set(re.findall(r'if\s+"%CHOICE%"=="(\d)"', text))
+    offered = set(re.findall(r"^\s*echo\s+(\d{1,2})\s{2,}\S", text, re.MULTILINE))
+    offered |= set(re.findall(r"^\s*echo\s+(\d{1,2})\s+\w", text, re.MULTILINE))
+    # 0 is offered and dispatched like any other choice; it just exits.
+    dispatched = set(re.findall(r'if\s+"%CHOICE%"=="(\d{1,2})"', text))
 
-    assert offered, "no menu entries found - has the menu format changed?"
+    assert offered,"no menu entries found - has the menu format changed?"
+    assert len(offered) >= 11, f"expected the full menu, found {sorted(offered)}"
     assert offered == dispatched, (
         f"menu offers {sorted(offered)} but dispatches {sorted(dispatched)}"
     )
