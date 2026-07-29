@@ -269,10 +269,13 @@ echo.
 echo   Every check and every decision is written to
 echo   artifacts\decisions.jsonl and shown live on the page.
 echo.
-echo   Nothing leaves your machine. Leave this window open while you use it;
-echo   press Ctrl+C here to stop the server.
+echo   Nothing leaves your machine. It opens in ITS OWN window so this menu
+echo   stays usable - close that window to stop the server.
 echo.
-"%VPY%" -m mnq.cli dashboard --open
+REM  `start` opens a second console and returns immediately. Running it in
+REM  this window instead would block the menu for as long as the server ran,
+REM  which meant opening a whole new Command Prompt just to pick option 3.
+start "MNQ dashboard" cmd /k ""%VPY%" -m mnq.cli dashboard --open"
 goto :done
 
 :do_auto
@@ -294,10 +297,14 @@ echo   it tests whether the live win rate still matches the 37.5%% the
 echo   backtest produced, and says when the sample is still too small to
 echo   tell - which it will be for the first few weeks.
 echo.
-echo   Leave this window open. Ctrl+C stops it. Progress is saved, so
-echo   stopping and restarting loses nothing.
+echo   It opens in ITS OWN window so this menu stays usable. Close that
+echo   window to stop it. Progress is saved, so stopping and restarting
+echo   loses nothing.
 echo.
-"%VPY%" -m mnq.cli auto --open
+echo   Train a model first (option 3) or it can only collect bars. If you
+echo   train while it is running it picks the new model up on its own.
+echo.
+start "MNQ autopilot" cmd /k ""%VPY%" -m mnq.cli auto --open"
 goto :done
 
 :do_status

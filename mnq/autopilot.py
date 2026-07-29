@@ -174,6 +174,9 @@ class Autopilot:
         while not self._stop.is_set():
             cycle_started = time.monotonic()
             try:
+                # Before anything else: a model may have been trained in
+                # another window since the last cycle.
+                self.engine.refresh_models()
                 self._poll()
                 self._maybe_signal()
                 self._collect_closed_trades()

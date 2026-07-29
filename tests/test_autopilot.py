@@ -155,6 +155,9 @@ class _FakeEngine:
         self.store.bars.append(ts)
         return {}
 
+    def refresh_models(self):
+        return False
+
     def evaluate(self, force=False):
         if "evaluate" in self.fail_on:
             raise RuntimeError("evaluate exploded")

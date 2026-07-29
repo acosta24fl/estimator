@@ -61,6 +61,9 @@ class _Engine:
         self.store.bars.append(ts)
         return {}
 
+    def refresh_models(self):
+        return False
+
     def evaluate(self, force=False):
         self.evaluated += 1
         return None
@@ -354,6 +357,87 @@ class TestEveryDecisionIsWrittenDown:
         assert engine.evaluate() is None
         gate = journal.tail(1, kinds=["gate"])[0]
         assert gate["decision"] == "skipped" and "cooldown" in gate["reason"]
+
+
+class TestModelsAreNoticedWithoutARestart:
+    """Training happens in another process; the dashboard must notice.
+
+    Someone follows the page's own instruction to run option 3, watches it
+    succeed, comes back, and the panel still says "no trained model". The
+    system appears to ignore its own output, and the only cure was a restart.
+    """
+
+    def _engine(self, cfg, tmp_path):
+        from mnq.data.store import BarStore
+        from mnq.server.engine import LiveEngine
+
+        # model_dir lives on Config itself, not on cfg.model. Setting the wrong
+        # one silently pointed these tests at the real artifacts/models, where
+        # they picked up a bundle another test had written.
+        cfg.model_dir = str(tmp_path / "models")
+        journal = DecisionLog(tmp_path / "decisions.jsonl")
+        engine = LiveEngine(
+            cfg, store=BarStore(tmp_path / "bars.csv", 100),
+            load_models=False, journal=journal,
+        )
+        return engine, journal
+
+    def _write_bundle(self, cfg, payload=None):
+        import joblib
+
+        path = cfg.path("model_dir")
+        path.mkdir(parents=True, exist_ok=True)
+        joblib.dump(
+            payload or {"feature_names": ["a", "b"], "trained_at": "2026-07-29",
+                        "directions": {}, "shared_regressor": None},
+            path / "ensemble.joblib",
+        )
+
+    def test_a_model_trained_after_startup_is_picked_up(self, cfg, tmp_path):
+        engine, journal = self._engine(cfg, tmp_path)
+        assert engine.bundle is None
+        assert engine.refresh_models() is False, "nothing on disk yet"
+
+        self._write_bundle(cfg)
+        assert engine.refresh_models() is True
+        assert engine.bundle is not None
+
+        note = journal.tail(1, kinds=["system"])[0]
+        assert "no restart" in note["summary"]
+
+    def test_an_unchanged_model_is_not_reloaded_every_cycle(self, cfg, tmp_path):
+        engine, _ = self._engine(cfg, tmp_path)
+        self._write_bundle(cfg)
+        assert engine.refresh_models() is True
+        assert engine.refresh_models() is False, "mtime unchanged; do not reload"
+
+    def test_a_half_written_model_leaves_the_old_one_in_place(self, cfg, tmp_path):
+        """Training writes over several seconds; a mid-write read must not blank."""
+        engine, _ = self._engine(cfg, tmp_path)
+        self._write_bundle(cfg)
+        engine.refresh_models()
+        good = engine.bundle
+
+        path = cfg.path("model_dir") / "ensemble.joblib"
+        path.write_bytes(b"\x00 half written garbage")
+        assert engine.refresh_models() is False
+        assert engine.bundle is good, "a corrupt file must not clear the model"
+
+    def test_the_readiness_panel_flips_once_a_model_exists(self, cfg, tmp_path):
+        engine, _ = self._engine(cfg, tmp_path)
+        feed = {"running": True, "health": "live", "detail": "ok"}
+
+        before = dashboard.readiness(cfg, engine.status(), None, [], feed)
+        stale = [c for c in before["checks"] if c["name"] == "Trained model"][0]
+        assert not stale["ok"] and "option 3" in stale["fix"]
+
+        self._write_bundle(cfg)
+        engine.refresh_models()
+        after = dashboard.readiness(
+            cfg, engine.status(), {"close": 21_000.0}, [], feed
+        )
+        model = [c for c in after["checks"] if c["name"] == "Trained model"][0]
+        assert model["ok"] and model["state"] == "loaded"
 
 
 class TestSnapshotCarriesLiveness:

@@ -72,9 +72,11 @@ class LiveEngine:
         self._today = datetime.now(timezone.utc).date()
 
         self.bundle: dict[str, Any] | None = None
+        self._bundle_stamp: float | None = None
         if load_models:
             try:
                 self.bundle = load_bundle(cfg)
+                self._bundle_stamp = self._bundle_mtime()
                 log.info(
                     "loaded models trained at %s (%d features)",
                     self.bundle["trained_at"], len(self.bundle["feature_names"]),
@@ -96,6 +98,54 @@ class LiveEngine:
                     "train.",
                     models_loaded=False, detail=str(exc),
                 )
+
+    # --------------------------------------------------------- model reload
+
+    def _bundle_mtime(self) -> float | None:
+        try:
+            return (self.cfg.path("model_dir") / "ensemble.joblib").stat().st_mtime
+        except OSError:
+            return None
+
+    def refresh_models(self) -> bool:
+        """Load the model bundle if it appeared or changed on disk.
+
+        Training runs in a *separate* process - a second terminal, or the
+        Windows menu - so the long-lived dashboard process has no way to know a
+        model now exists. Without this, someone follows the page's own
+        instruction to train, watches it succeed, and comes back to a panel
+        still saying "no trained model": the system appears to ignore its own
+        output. Polling one file's mtime once a cycle is the cheapest honest
+        fix.
+
+        Returns True when a bundle was swapped in.
+        """
+        stamp = self._bundle_mtime()
+        if stamp is None or stamp == self._bundle_stamp:
+            return False
+        try:
+            bundle = load_bundle(self.cfg)
+        except Exception as exc:  # noqa: BLE001 - a half-written file is normal
+            # Training writes the file over several seconds; a read landing
+            # mid-write must leave the previous model in place and retry next
+            # cycle rather than blanking the page.
+            log.debug("model file changed but is not loadable yet (%s)", exc)
+            return False
+
+        with self._lock:
+            first = self.bundle is None
+            self.bundle = bundle
+            self._bundle_stamp = stamp
+        log.info("models %s from disk", "loaded" if first else "reloaded")
+        self.journal.record(
+            "system",
+            f"Picked up {'a newly trained' if first else 'an updated'} model "
+            f"({len(bundle['feature_names'])} features, trained "
+            f"{bundle['trained_at']}). Direction calls start now — no restart "
+            f"needed.",
+            models_loaded=True, first_load=first,
+        )
+        return True
 
     # ------------------------------------------------------------ ingestion
 

@@ -643,6 +643,44 @@ def cmd_ingest(args, cfg: Config) -> int:
     return 0
 
 
+def _port_is_free(host: str, port: int) -> bool:
+    """Can we bind ``port``, or is something already there?
+
+    Checked up front because the alternative is a uvicorn traceback several
+    screens long whose actual cause - "the dashboard is already running in
+    another window" - is one line buried in the middle of it.
+    """
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            sock.bind(("127.0.0.1" if host == "0.0.0.0" else host, port))
+            return True
+        except OSError:
+            return False
+
+
+def _refuse_busy_port(host: str, port: int, what: str) -> bool:
+    if _port_is_free(host, port):
+        return False
+    print(f"""
+  ============================================================
+    PORT {port} IS ALREADY IN USE
+  ============================================================
+    Something is already serving on http://localhost:{port}/ —
+    almost certainly the dashboard (option 7) or the autopilot
+    (option 8) running in another window.
+
+    They cannot both use the same port. Either:
+
+      * close that other window first, then run {what} again, or
+      * run this one on a different port:  --port {port + 1}
+  ============================================================
+""")
+    return True
+
+
 def cmd_dashboard(args, cfg: Config) -> int:
     """Serve the local dashboard with a live, watch-only price feed.
 
@@ -664,6 +702,8 @@ def cmd_dashboard(args, cfg: Config) -> int:
 
     _apply_profile(args, cfg)
     cfg.server.host, cfg.server.port = args.host, args.port
+    if _refuse_busy_port(args.host, args.port, "the dashboard"):
+        return 1
 
     decisions = DecisionLog(ARTIFACT_DIR / "decisions.jsonl")
     engine = LiveEngine(cfg, journal=decisions)
@@ -730,6 +770,8 @@ def cmd_auto(args, cfg: Config) -> int:
     args.profile = "wide"
     _apply_profile(args, cfg)
     cfg.server.host, cfg.server.port = args.host, args.port
+    if _refuse_busy_port(args.host, args.port, "the autopilot"):
+        return 1
 
     decisions = DecisionLog(ARTIFACT_DIR / "decisions.jsonl")
     engine = LiveEngine(cfg, journal=decisions)
