@@ -123,6 +123,103 @@ def trend_summary(matrix: pd.DataFrame, lookbacks=(6, 24, 120)) -> dict[str, Any
     return out
 
 
+def readiness(
+    cfg: Config,
+    engine_status: dict[str, Any] | None,
+    score: dict[str, Any] | None,
+    horizons: list[dict[str, Any]] | None,
+    feed: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """What is working, what is not, and what to do about it.
+
+    A blank projection has several possible causes - no model, no data, a cold
+    feed, not enough history for the horizon table - and they look identical on
+    screen. Someone reading a flat panel deserves to know which one it is
+    rather than being left to guess whether the system is broken or simply has
+    nothing to say.
+    """
+    e = engine_status or {}
+    bars = int(e.get("bars") or 0)
+    checks: list[dict[str, Any]] = []
+
+    running = bool(feed and feed.get("running"))
+    checks.append({
+        "name": "Live price feed",
+        "ok": running and (feed or {}).get("health") in ("live", "stale", "starting"),
+        "state": (feed or {}).get("health", "stopped"),
+        "detail": (feed or {}).get(
+            "detail",
+            "No feed in this process. Prices come from the cached history only.",
+        ),
+        "fix": "" if running else "Restart with option 7 or option 8.",
+    })
+
+    checks.append({
+        "name": "Price history",
+        "ok": bars >= 2_000,
+        "state": f"{bars:,} bars",
+        "detail": (
+            f"{bars:,} one-minute bars held."
+            if bars >= 2_000 else
+            f"Only {bars:,} bars. Indicators need a few thousand to warm up."
+        ),
+        "fix": "" if bars >= 2_000 else "Run option 1 to download more history.",
+    })
+
+    trained = bool(e.get("models_loaded"))
+    checks.append({
+        "name": "Trained model",
+        "ok": trained,
+        "state": "loaded" if trained else "missing",
+        "detail": (
+            "The direction model is loaded and scoring."
+            if trained else
+            "No trained model exists, so the system cannot give a direction. "
+            "Everything else on this page still works."
+        ),
+        "fix": "" if trained else "Run option 3 (train + backtest) once.",
+    })
+
+    scored = score is not None
+    checks.append({
+        "name": "Live prediction",
+        "ok": scored,
+        "state": "scoring" if scored else "idle",
+        "detail": (
+            f"Last scored at {score.get('close'):,.2f}."
+            if scored and score.get("close") else
+            "Nothing scored yet — this follows from the checks above."
+        ),
+        "fix": "",
+    })
+
+    skilled = sum(1 for h in (horizons or []) if h.get("has_skill"))
+    total = len(horizons or [])
+    checks.append({
+        "name": "Forecast horizons",
+        "ok": bool(total),
+        "state": f"{skilled}/{total} usable" if total else "not built",
+        "detail": (
+            f"{skilled} of {total} time horizons currently beat a coin flip."
+            if total else
+            "The horizon table needs a few thousand 1-minute bars to build."
+        ),
+        "fix": "",
+    })
+
+    blocking = [c for c in checks if not c["ok"] and c["fix"]]
+    if not blocking:
+        headline = "Everything the system needs is in place."
+    else:
+        headline = blocking[0]["fix"]
+    return {
+        "checks": checks,
+        "ready": all(c["ok"] for c in checks[:4]),
+        "headline": headline,
+        "blocking": len(blocking),
+    }
+
+
 def build_snapshot(
     cfg: Config,
     matrix: pd.DataFrame | None,
@@ -136,12 +233,24 @@ def build_snapshot(
     trend_read: dict[str, Any] | None = None,
     alpha: dict[str, Any] | None = None,
     path: list[dict[str, Any]] | None = None,
+    activity: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Everything the page needs, in one response."""
+    feed = (autopilot or {}).get("feed")
     payload: dict[str, Any] = {
         "symbol": cfg.data.symbol,
         "profile": cfg.data.profile,
         "generated_at": pd.Timestamp.now("UTC").isoformat(),
+        "feed": feed or {
+            "running": False, "health": "stopped", "mode": "static",
+            "detail": (
+                "This process is not pulling prices. The chart is the cached "
+                "history it started with."
+            ),
+            "source": "cache",
+        },
+        "readiness": readiness(cfg, engine_status, score, horizons, feed),
+        "activity": activity or [],
         "chart": bars_payload(matrix, limit) if matrix is not None else {"bars": []},
         "indicators": indicator_payload(matrix) if matrix is not None else {},
         "trend": trend_summary(matrix) if matrix is not None else {},

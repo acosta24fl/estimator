@@ -126,8 +126,8 @@ echo   3  Train + backtest         (pooled 4-instrument - the main path)
 echo   4  Validate a result        (permutation test - is it real?)
 echo   5  Cross-instrument test    (train on ES/YM/RTY, predict MNQ)
 echo   6  Ingest purchased history  (real vendor data - the big one)
-echo   7  Open the dashboard      (live chart + projection in a browser)
-echo   8  AUTOPILOT               (runs by itself - paper trading)
+echo   7  Open the dashboard      (live prices, updates itself, watch only)
+echo   8  AUTOPILOT               (same page + records simulated trades)
 echo   9  Show status
 echo  10  Run the tests
 echo.
@@ -261,10 +261,13 @@ goto :done
 echo.
 echo   Starts a local web page at http://localhost:8000
 echo.
-echo   It shows the live candle chart, the model's direction and expected
-echo   move in points, and the calibration table those points come from -
-echo   what price actually did after each signal strength, measured on
-echo   out-of-sample predictions rather than asserted by the model.
+echo   It pulls fresh 1-minute prices every 60 seconds and re-reads the
+echo   market on the same cadence, so the page updates by itself - you do
+echo   not need to refresh it. Watch only: it says what it would do and
+echo   opens nothing. Option 8 is the same page with simulated trades on.
+echo.
+echo   Every check and every decision is written to
+echo   artifacts\decisions.jsonl and shown live on the page.
 echo.
 echo   Nothing leaves your machine. Leave this window open while you use it;
 echo   press Ctrl+C here to stop the server.

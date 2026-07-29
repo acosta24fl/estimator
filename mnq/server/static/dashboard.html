@@ -7,11 +7,19 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 fill=%22%23070a0f%22/%3E%3Cpath d=%22M2 13L6 8L9 10L14 3%22 stroke=%22%2300e5c7%22 stroke-width=%222%22 fill=%22none%22/%3E%3C/svg%3E">
 <style>
 /* ------------------------------------------------------------------
-   Design rule for this page: VISUAL WEIGHT ENCODES EVIDENCE.
-   Anything the system cannot statistically support is rendered faint,
-   hatched and desaturated. Full contrast is reserved for measured skill.
-   Most dashboards render every number at equal weight, which is how a
-   confident-looking figure with nothing behind it gets believed.
+   Two design rules for this page.
+
+   1. VISUAL WEIGHT ENCODES EVIDENCE. Anything the system cannot
+      statistically support is rendered faint, hatched and desaturated.
+      Full contrast is reserved for measured skill. Most dashboards render
+      every number at equal weight, which is how a confident-looking figure
+      with nothing behind it gets believed.
+
+   2. EVERY NUMBER CARRIES ITS OWN EXPLANATION. This is a second opinion
+      for someone about to risk money, not a telemetry readout. A reader who
+      does not know what "p90" or "ATR" means must still be able to act on
+      what they see, so the jargon is always accompanied by the sentence it
+      stands for.
    ------------------------------------------------------------------ */
 :root{
   --bg:#070a0f; --panel:#0d121a; --panel2:#111823; --line:#1e2836;
@@ -40,6 +48,22 @@ header{display:flex;align-items:center;gap:20px;flex-wrap:wrap;
 .delta{font-family:var(--mono);font-size:14px}
 .spacer{flex:1}
 
+/* --- the live indicator: proof the page is not a photograph ---
+   A timestamp alone cannot distinguish "updated a second ago" from a frozen
+   process, because the frozen process also renders a timestamp. The dot only
+   beats while data is genuinely arriving, and the countdown only runs while a
+   next poll is actually scheduled. */
+.live{display:flex;align-items:center;gap:9px;padding:5px 12px;
+      border:1px solid var(--line);border-radius:2px;background:var(--panel2)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--faint);flex:none}
+.dot.beat{background:var(--up);animation:pulse 2s ease-in-out infinite}
+.dot.warn{background:var(--warn)} .dot.bad{background:var(--down)}
+@keyframes pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 var(--up)}
+                 50%{opacity:.55;box-shadow:0 0 0 5px transparent}}
+@media (prefers-reduced-motion: reduce){ .dot.beat{animation:none} }
+.live .w{font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.live .s{font-family:var(--mono);font-size:10px;color:var(--dim)}
+
 /* --- the alpha badge: the one loud element on the page --- */
 .alpha{display:flex;align-items:center;gap:12px;padding:6px 14px;
        border:1px solid var(--line);border-radius:2px;background:var(--panel2)}
@@ -51,8 +75,18 @@ header{display:flex;align-items:center;gap:20px;flex-wrap:wrap;
 .alpha .lbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;
             color:var(--dim)}
 
+/* --- the headline: the whole page in one sentence --- */
+.headline{margin:14px 22px 0;padding:14px 18px;background:var(--panel);
+          border:1px solid var(--line);border-left:3px solid var(--faint);
+          display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.headline.act{border-left-color:var(--cool)}
+.headline.wait{border-left-color:var(--faint)}
+.headline.fix{border-left-color:var(--warn)}
+.headline .big{font-size:17px;line-height:1.45;flex:1;min-width:260px}
+.headline .sub{font-size:12px;color:var(--dim);margin-top:5px}
+
 .wrap{padding:14px 22px 40px;display:grid;gap:14px;
-      grid-template-columns:minmax(0,2.4fr) minmax(300px,1fr)}
+      grid-template-columns:minmax(0,2.4fr) minmax(320px,1fr)}
 @media (max-width:1100px){ .wrap{grid-template-columns:1fr} }
 
 .card{background:var(--panel);border:1px solid var(--line);padding:13px 15px}
@@ -60,23 +94,30 @@ header{display:flex;align-items:center;gap:20px;flex-wrap:wrap;
 .card h2{font-size:10px;text-transform:uppercase;letter-spacing:.16em;
          color:var(--dim);margin:0 0 11px;font-weight:600;
          display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card h2 .plain{text-transform:none;letter-spacing:0;font-size:11px;
+                color:var(--faint);font-weight:400}
 canvas{width:100%;height:auto;display:block}
 
 .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--dim)}
 .warnc{color:var(--warn)}
 
-/* --- horizon ladder: the signature element --- */
+/* --- horizon ladder: the signature element ---
+   Each rung is a full sentence, not a code. The time column reads "in 5
+   minutes"; the verdict column reads USABLE or JUST NOISE. */
 .ladder{display:flex;flex-direction:column;gap:1px}
-.rung{display:grid;grid-template-columns:42px 1fr 74px 52px;align-items:center;
-      gap:10px;padding:7px 8px;background:var(--panel2);
+.rung{display:grid;grid-template-columns:104px 1fr 96px 62px 76px;
+      align-items:center;gap:10px;padding:8px;background:var(--panel2);
       border-left:2px solid transparent}
-.rung.skill{border-left-color:var(--cool);background:var(--panel2)}
-.rung.noskill{opacity:.42}
-.rung .h{font-family:var(--mono);font-size:12px;color:var(--dim);
-         letter-spacing:.05em}
+.rung.skill{border-left-color:var(--cool)}
+.rung.noskill{opacity:.45}
+.rung .h{font-size:12px;color:var(--dim)}
 .rung.skill .h{color:var(--text)}
-.rung .dest{font-family:var(--mono);font-size:12px;text-align:right}
-.rung .sk{font-family:var(--mono);font-size:10px;text-align:right;color:var(--dim)}
+.rung .dest{font-family:var(--mono);font-size:13px;text-align:right}
+.rung .pts{font-family:var(--mono);font-size:11px;text-align:right}
+.rung .tag{font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+           text-align:center;padding:2px 0;border:1px solid var(--line);
+           color:var(--dim)}
+.rung.skill .tag{color:var(--cool);border-color:var(--cool)}
 /* The band track: a horizontal uncertainty bar with the median as a notch. */
 .track{position:relative;height:16px;background:linear-gradient(
        to right,transparent,var(--line) 12%,var(--line) 88%,transparent);
@@ -87,6 +128,55 @@ canvas{width:100%;height:auto;display:block}
 .zero{position:absolute;top:0;width:1px;height:16px;background:var(--faint)}
 .hatch{background-image:repeating-linear-gradient(45deg,
        currentColor 0 2px,transparent 2px 5px)}
+.ladderhead{display:grid;grid-template-columns:104px 1fr 96px 62px 76px;
+            gap:10px;padding:0 8px 5px;font-size:9px;letter-spacing:.1em;
+            text-transform:uppercase;color:var(--faint)}
+.ladderhead div:nth-child(3),.ladderhead div:nth-child(4){text-align:right}
+.ladderhead div:nth-child(5){text-align:center}
+
+/* --- collapsible plain-English explainer --- */
+details{margin-top:10px;border-top:1px solid var(--line);padding-top:8px}
+summary{cursor:pointer;font-size:11px;color:var(--cool);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";}
+details[open] summary::before{content:"▾ ";}
+details .body{font-size:12px;color:var(--dim);line-height:1.6;margin-top:8px}
+details .body b{color:var(--text);font-weight:600}
+details .body p{margin:0 0 8px}
+
+/* --- readiness checklist --- */
+.check{display:grid;grid-template-columns:16px 1fr auto;gap:9px;
+       align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
+.check:last-child{border-bottom:0}
+.check .m{font-family:var(--mono);font-size:12px}
+.check .m.y{color:var(--up)} .check .m.n{color:var(--warn)}
+.check .n{font-size:12px}
+.check .d{font-size:11px;color:var(--dim);margin-top:2px}
+.check .st{font-family:var(--mono);font-size:10px;color:var(--dim);
+           white-space:nowrap}
+
+/* --- activity feed: the decision log, live --- */
+.feed{max-height:340px;overflow-y:auto;display:flex;flex-direction:column;
+      gap:1px}
+.ev{display:grid;grid-template-columns:58px 62px 1fr;gap:9px;padding:6px 8px;
+    background:var(--panel2);align-items:baseline}
+.ev .ts{font-family:var(--mono);font-size:10px;color:var(--faint)}
+.ev .k{font-size:9px;letter-spacing:.09em;text-transform:uppercase;
+       color:var(--dim)}
+.ev .m{font-size:12px;line-height:1.45}
+.ev.k-signal{border-left:2px solid var(--cool)} .ev.k-signal .k{color:var(--cool)}
+.ev.k-exit{border-left:2px solid var(--warn)} .ev.k-exit .k{color:var(--warn)}
+.ev.k-error{border-left:2px solid var(--down)} .ev.k-error .k{color:var(--down)}
+.ev.k-system{border-left:2px solid var(--faint)}
+.ev.k-poll{opacity:.62}
+
+/* --- component bars for the alpha breakdown --- */
+.comp{display:grid;grid-template-columns:96px 1fr 38px;align-items:center;
+      gap:9px;padding:3px 0}
+.comp .n{font-size:11px;color:var(--dim)}
+.comp .t{height:4px;background:var(--line);overflow:hidden}
+.comp .t>i{display:block;height:100%;background:var(--cool)}
+.comp .v{font-family:var(--mono);font-size:11px;text-align:right;color:var(--dim)}
 
 /* --- verdict strip --- */
 .verdict{display:flex;align-items:center;gap:12px;padding:10px 12px;
@@ -96,22 +186,22 @@ canvas{width:100%;height:auto;display:block}
 .verdict.neutral,.verdict.no-signal,.verdict.no-trend{border-left-color:var(--faint)}
 .verdict .v{font-family:var(--mono);font-size:15px;letter-spacing:.06em;
             text-transform:uppercase;white-space:nowrap}
-.verdict .d{font-size:12px;color:var(--dim)}
-
-/* --- component bars for the alpha breakdown --- */
-.comp{display:grid;grid-template-columns:88px 1fr 38px;align-items:center;
-      gap:9px;padding:3px 0}
-.comp .n{font-size:11px;color:var(--dim);text-transform:uppercase;
-         letter-spacing:.08em}
-.comp .t{height:4px;background:var(--line);overflow:hidden}
-.comp .t>i{display:block;height:100%;background:var(--cool)}
-.comp .v{font-family:var(--mono);font-size:11px;text-align:right;color:var(--dim)}
 
 .row{display:flex;justify-content:space-between;gap:12px;padding:4px 0;
      border-bottom:1px solid var(--line)}
 .row:last-child{border-bottom:0}
 .row span:first-child{color:var(--dim)}
 .row span:last-child{font-family:var(--mono)}
+/* Market conditions reads as a scannable grid rather than one long column;
+   eleven stacked rows is a list nobody finishes. */
+.grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+       gap:0 22px}
+.irow{padding:5px 0;border-bottom:1px solid var(--line)}
+.irow:last-child{border-bottom:0}
+.irow .top{display:flex;justify-content:space-between;gap:12px}
+.irow .top span:first-child{color:var(--text)}
+.irow .top span:last-child{font-family:var(--mono)}
+.irow .why{font-size:11px;color:var(--dim);margin-top:1px;line-height:1.4}
 table{width:100%;border-collapse:collapse;font-size:11px}
 th,td{text-align:right;padding:4px 5px;border-bottom:1px solid var(--line);
       font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -131,11 +221,18 @@ th{color:var(--dim);font-weight:500;font-family:inherit;font-size:10px;
     <div class="px" id="price">—</div>
   </div>
   <div class="delta" id="chg">—</div>
+  <div class="live">
+    <div class="dot" id="dot"></div>
+    <div>
+      <div class="w" id="livew">connecting</div>
+      <div class="s" id="lives">—</div>
+    </div>
+  </div>
   <div class="spacer"></div>
   <div class="alpha">
     <div class="grade g-F" id="grade">—</div>
     <div>
-      <div class="lbl">alpha</div>
+      <div class="lbl">second opinion</div>
       <div class="mono" id="ascore" style="font-size:13px">—</div>
     </div>
   </div>
@@ -147,6 +244,13 @@ th{color:var(--dim);font-weight:500;font-family:inherit;font-size:10px;
 
 <div id="error" class="err" hidden></div>
 
+<div class="headline" id="head">
+  <div>
+    <div class="big" id="headbig">Reading the market…</div>
+    <div class="sub" id="headsub"></div>
+  </div>
+</div>
+
 <div class="wrap">
   <div>
     <div class="card">
@@ -156,34 +260,90 @@ th{color:var(--dim);font-weight:500;font-family:inherit;font-size:10px;
     </div>
 
     <div class="card">
-      <h2><span>Horizon ladder — destination and uncertainty</span>
+      <h2><span>Where price could be later</span>
           <span id="ladderhint"></span></h2>
+      <div class="ladderhead">
+        <div>When</div><div>Range of outcomes</div>
+        <div>Likely price</div><div>Move</div><div>Trust it?</div>
+      </div>
       <div class="ladder" id="ladder"></div>
+      <details>
+        <summary>How to read this</summary>
+        <div class="body">
+          <p>Each row answers one question: <b>if I look at the screen again
+          in 5 minutes / an hour / a day, where is price likely to be?</b></p>
+          <p>The answer comes from history, not from an opinion. The system
+          finds every past moment when the market looked like it does now — same
+          trend direction, same trend strength, same level of volatility — and
+          asks what happened next. The <b>Likely price</b> column is the middle
+          of those outcomes: half the time it ended up higher, half the time
+          lower.</p>
+          <p>The bar shows how spread out those outcomes were. The
+          <b>solid block</b> is where price landed half the time. The
+          <b>faint block</b> stretches out to the unusual cases — 8 out of 10
+          landed inside it. The <b>vertical notch</b> is the likely price, and
+          the <b>thin centre line</b> is where price is right now. A wide bar
+          means "genuinely could go either way", and that is information, not a
+          flaw.</p>
+          <p>The last column is the one that matters most. <b>USABLE</b> means
+          the system checked itself on data it had never seen and this row beat
+          simply guessing "price stays where it is". <b>JUST NOISE</b> means it
+          did not — the row is still shown for completeness, but you should
+          ignore it. Most of the time most rows say JUST NOISE. That is the
+          honest state of a market this efficient, and a panel claiming
+          otherwise would be lying to you.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2><span>What the system is doing</span>
+          <span id="feedcount"></span></h2>
+      <div class="feed" id="feed"></div>
+      <details>
+        <summary>About this log</summary>
+        <div class="body">
+          <p>Every check, every score and every decision — including all the
+          times it decided <b>not</b> to trade — is written to
+          <span class="mono" id="logpath">artifacts/decisions.jsonl</span> as it
+          happens. This panel shows the most recent entries.</p>
+          <p>The rejections are the valuable part. "Why did it skip that move?"
+          is the question that improves the system, and it can only be answered
+          from a written record of the skips.</p>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <h2><span>Track record by confidence level</span>
+          <span class="plain">what actually happened after past signals</span></h2>
+      <table id="calib"><thead><tr>
+        <th>Side</th><th>Confidence</th><th>Signals</th><th>Won</th>
+        <th>Bad case</th><th>Typical</th><th>Good case</th>
+      </tr></thead><tbody></tbody></table>
       <div class="note">
-        Each rung is one horizon. The bar is where price landed historically
-        from this exact state: the solid band is the middle half, the faint one
-        the 10th–90th. The notch is the median, the thin line is no change.
-        <b>Rungs with no measurable skill are dimmed and hatched</b> — the
-        forecast is shown, but it is not distinguishable from a random walk.
+        Measured on data the model was never trained on. "Typical" is the
+        middle outcome in points; "bad case" and "good case" are the 25th and
+        75th. Positive numbers favour the side taken.
       </div>
     </div>
 
     <div class="card">
-      <h2>Confidence calibration — what followed each signal strength</h2>
-      <table id="calib"><thead><tr>
-        <th>Side</th><th>Conf</th><th>n</th><th>Hit</th>
-        <th>25th</th><th>Median</th><th>75th</th>
-      </tr></thead><tbody></tbody></table>
-      <div class="note">
-        Out-of-sample walk-forward predictions. Points are the realised move,
-        signed so positive favours the side.
-      </div>
+      <h2><span>Market conditions</span>
+          <span class="plain">what each reading tells you</span></h2>
+      <div class="grid2" id="ind"></div>
     </div>
   </div>
 
   <div>
     <div class="card">
-      <h2>Trend read</h2>
+      <h2><span>System check</span><span id="readystate"></span></h2>
+      <div id="ready"></div>
+    </div>
+
+    <div class="card">
+      <h2><span>Trend read</span>
+          <span class="plain">is this move likely to keep going?</span></h2>
       <div class="verdict" id="verdict">
         <div class="v" id="vword">—</div>
       </div>
@@ -192,36 +352,48 @@ th{color:var(--dim);font-weight:500;font-family:inherit;font-size:10px;
     </div>
 
     <div class="card">
-      <h2>Alpha components</h2>
+      <h2><span>Why that grade</span>
+          <span class="plain">the four parts of the score</span></h2>
       <div id="comps"></div>
       <div class="note" id="anote"></div>
+      <details>
+        <summary>What the four parts mean</summary>
+        <div class="body">
+          <p><b>Skill</b> — how much better than guessing "no change" the best
+          horizon is, measured on unseen data. This is the gate: at zero, the
+          whole score is zero no matter how good the rest looks.</p>
+          <p><b>Conviction</b> — how far the up/down call sits from a coin
+          flip.</p>
+          <p><b>Payoff</b> — whether the expected move is big enough to be worth
+          the cost of getting in and out (about 0.9 points round trip on MNQ).</p>
+          <p><b>Agreement</b> — whether the time horizons point the same way.
+          Disagreement is a warning, not a detail.</p>
+        </div>
+      </details>
     </div>
 
     <div class="card">
-      <h2>Model projection</h2>
+      <h2><span>Direction call</span>
+          <span class="plain">from the trained model</span></h2>
       <div class="mono" id="dir" style="font-size:22px">—</div>
       <div class="mono" id="pts" style="font-size:20px">—</div>
       <div class="note" id="projnote"></div>
     </div>
 
     <div class="card">
-      <h2>Levels</h2>
+      <h2><span>If you took this trade</span>
+          <span class="plain">levels the system would use</span></h2>
       <div id="levels"></div>
     </div>
 
     <div class="card">
-      <h2>Indicators</h2>
-      <div id="ind"></div>
-    </div>
-
-    <div class="card">
-      <h2>Autopilot <span class="pill" id="autostate"></span></h2>
+      <h2>Live feed <span class="pill" id="autostate"></span></h2>
       <div id="auto"></div>
       <div class="note" id="autonote"></div>
     </div>
 
     <div class="card">
-      <h2>Paper vs backtest</h2>
+      <h2><span>Simulated trades vs backtest</span></h2>
       <div id="paper"></div>
       <div class="note" id="drift"></div>
     </div>
@@ -239,14 +411,110 @@ const nil = v => v === null || v === undefined || Number.isNaN(v);
 const fmt = (v,d=2) => nil(v) ? "—"
   : Number(v).toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
 const signed = (v,d=1) => nil(v) ? "—" : (v>0?"+":"")+fmt(v,d);
+/* Point moves, rounded for reading. Two traps: rounding -0.4 to zero decimals
+   prints "-0", which reads as a downward call that is not being made; and
+   rounding a 0.4-point move to "0" hides the only number in the row. */
+const move = v => {
+  if(nil(v)) return "—";
+  const d = Math.abs(v) < 10 ? 1 : 0;
+  const r = Number(Number(v).toFixed(d)) || 0;     // `|| 0` collapses -0
+  return (r>0?"+":"")+fmt(r,d);
+};
 const cls = v => nil(v) ? "flat" : (v>0?"up":(v<0?"down":"flat"));
 const css = n => getComputedStyle(document.body).getPropertyValue(n).trim();
+const esc = s => String(s ?? "").replace(/[&<>"]/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 let latest = null;
+// Ticked locally between fetches so the countdown moves every second rather
+// than jumping once per poll.
+let feedClock = null, feedAt = 0;
 
 function rows(target, pairs){
   $(target).innerHTML = pairs.map(([k,v,c]) =>
-    `<div class="row"><span>${k}</span><span class="${c||''}">${v}</span></div>`
+    `<div class="row"><span>${esc(k)}</span><span class="${c||''}">${v}</span></div>`
   ).join("") || `<div class="note">nothing to show</div>`;
+}
+
+/* Plain-English time phrases. "5m" is a unit; "in 5 minutes" is a sentence. */
+const WHEN = {5:"In 5 minutes", 10:"In 10 minutes", 15:"In 15 minutes",
+  30:"In 30 minutes", 60:"In 1 hour", 240:"In 4 hours", 1440:"In 24 hours"};
+
+/* What each market reading actually tells you. */
+const MEANS = {
+  rsi:"Momentum. Above 70 price has run hot, below 30 it has been beaten down.",
+  adx:"Trend strength. Above 25 is a real trend; below 20 is chop.",
+  atr:"How far price typically travels in one bar, in points. This sets the stop and target distance.",
+  atr_pct:"The same thing as a share of price.",
+  macd_hist:"Whether momentum is building or fading. Positive is building upward.",
+  slope20:"Which way the last 20 bars have been leaning.",
+  trend_strength:"Direction and strength combined. Further from zero is a stronger trend.",
+  rel_volume:"Trading activity against normal. Above 1 means busier than usual.",
+  vix_percentile:"Where fear sits versus the past year. High means a nervous market.",
+  risk_appetite:"Are investors buying risk or hiding in safety? Positive means buying.",
+  breadth:"Whether the major indexes agree. Disagreement often precedes a fake move."
+};
+
+/* ---------------- liveness ---------------- */
+function paintFeed(){
+  const f = latest?.feed;
+  if(!f){ return; }
+  const drift = (Date.now() - feedAt)/1000;
+  const since = f.seconds_since_poll==null ? null : f.seconds_since_poll + drift;
+  const until = f.seconds_until_poll==null ? null
+    : Math.max(0, f.seconds_until_poll - drift);
+
+  const dot = $("dot");
+  const map = {live:"beat", stale:"warn", starting:"beat", failing:"bad",
+               stopped:""};
+  dot.className = "dot " + (map[f.health] ?? "");
+  const words = {live:"live", stale:"market quiet", starting:"starting",
+                 failing:"feed down", stopped:"not live"};
+  $("livew").textContent = words[f.health] ?? f.health ?? "—";
+  $("livew").style.color = f.health==="live" ? "var(--up)"
+    : f.health==="failing" ? "var(--down)"
+    : f.health==="stale" ? "var(--warn)" : "var(--dim)";
+
+  const bits = [];
+  if(since!=null) bits.push(`checked ${Math.round(since)}s ago`);
+  if(until!=null) bits.push(`next in ${Math.round(until)}s`);
+  if(!bits.length) bits.push(f.source || "no feed");
+  $("lives").textContent = bits.join(" · ");
+}
+
+/* ---------------- the one-sentence read ---------------- */
+function headline(d){
+  const a = d.alpha, r = d.readiness, t = d.trend_read;
+  const head = $("head");
+  const usable = (d.horizons||[]).filter(h=>h.has_skill);
+
+  if(r && !r.ready){
+    head.className = "headline fix";
+    $("headbig").textContent = "The system is not fully set up yet.";
+    $("headsub").textContent = r.headline || "";
+    return;
+  }
+  if(!a || a.grade === "F"){
+    head.className = "headline wait";
+    $("headbig").innerHTML =
+      "<b>No edge right now.</b> Nothing on this screen is worth acting on.";
+    $("headsub").textContent = a?.note
+      || "The market is not doing anything the system can predict. This is the "
+       + "normal state most of the time, and standing aside is the correct call.";
+    return;
+  }
+  const best = usable.length
+    ? usable.reduce((x,y)=>Math.abs(y.median_points)>Math.abs(x.median_points)?y:x)
+    : null;
+  const dir = best ? (best.median_points>0 ? "higher" : "lower") : "unclear";
+  head.className = "headline act";
+  $("headbig").innerHTML = best
+    ? `Leaning <b class="${cls(best.median_points)}">${dir}</b> over the next `
+      + `<b>${(WHEN[best.minutes]||"").replace("In ","")}</b> — a typical move of `
+      + `<b>${move(best.median_points)} points</b> from here. `
+      + `Grade ${a.grade}, ${fmt(a.score,0)} out of 100.`
+    : `Grade ${a.grade}, ${fmt(a.score,0)} out of 100.`;
+  $("headsub").textContent = (t?.note || "") +
+    (a.tradeable ? "" : "  Below the grade B bar the system treats as actionable.");
 }
 
 /* ---------------- chart with the forward cone ---------------- */
@@ -407,8 +675,8 @@ function drawChart(data, levels, path){
       ctx.fillStyle=colour; ctx.fillText(label, padL+3, yy-3);
     };
     const d = latest?.projection?.direction;
-    if(d==="up"){ draw(levels.long_target,cUp,"TP"); draw(levels.long_stop,cDown,"SL"); }
-    else if(d==="down"){ draw(levels.short_target,cUp,"TP"); draw(levels.short_stop,cDown,"SL"); }
+    if(d==="up"){ draw(levels.long_target,cUp,"TARGET"); draw(levels.long_stop,cDown,"STOP"); }
+    else if(d==="down"){ draw(levels.short_target,cUp,"TARGET"); draw(levels.short_stop,cDown,"STOP"); }
   }
 
   // Time axis on the history side.
@@ -424,13 +692,15 @@ function drawChart(data, levels, path){
 function drawLadder(hz){
   if(!hz || !hz.length){
     $("ladder").innerHTML =
-      `<div class="note">No horizon model yet — it needs a few thousand
-       1-minute bars. Start the autopilot (option 8) and it fills in.</div>`;
+      `<div class="note">Not built yet. This table needs a few thousand
+       1-minute bars of history before it can find comparable past moments.</div>`;
     $("ladderhint").textContent = "";
     return;
   }
   const skilled = hz.filter(f=>f.has_skill).length;
-  $("ladderhint").textContent = `${skilled}/${hz.length} with measurable skill`;
+  $("ladderhint").textContent = skilled
+    ? `${skilled} of ${hz.length} worth trusting`
+    : `none of the ${hz.length} beat a coin flip right now`;
 
   // One shared axis, signed-square-root scaled. On a linear axis the 24h band
   // (hundreds of points) squashes the 5m band (a few points) into a flat line;
@@ -447,23 +717,66 @@ function drawLadder(hz){
                + `width:${Math.abs(pct(f.p90_points)-pct(f.p10_points))}%;background:${c}`;
     const mid  = `left:${pct(Math.min(f.p25_points,f.p75_points))}%;`
                + `width:${Math.abs(pct(f.p75_points)-pct(f.p25_points))}%;background:${c}`;
-    return `<div class="rung ${ok?'skill':'noskill'}" title="${f.note.replace(/"/g,'&quot;')}">
-      <div class="h">${f.label}</div>
+    const tip = ok
+      ? `${f.n_analogues} similar past moments. ${Math.round(100*f.p_up)}% of them `
+        + `ended higher, against ${Math.round(100*f.base_rate_up)}% for any random `
+        + `moment. Range: ${signed(f.p10_points,0)} to ${signed(f.p90_points,0)} points.`
+      : (f.note || "not distinguishable from a random walk");
+    return `<div class="rung ${ok?'skill':'noskill'}" title="${esc(tip)}">
+      <div class="h">${WHEN[f.minutes]||f.label}</div>
       <div class="track">
         <div class="zero" style="left:50%"></div>
         <div class="band wide ${ok?'':'hatch'}" style="${wide}"></div>
         <div class="band ${ok?'':'hatch'}" style="${mid}"></div>
         <div class="notch" style="left:${pct(f.median_points)}%"></div>
       </div>
-      <div class="dest ${cls(f.median_points)}">${signed(f.median_points,0)} pt</div>
-      <div class="sk">${ok ? "skill "+fmt(f.skill,3) : "—"}</div>
+      <div class="dest">${fmt(f.median_price,0)}</div>
+      <div class="pts ${cls(f.median_points)}">${move(f.median_points)}</div>
+      <div class="tag">${ok?"usable":"just noise"}</div>
+    </div>`;
+  }).join("");
+}
+
+/* ---------------- readiness ---------------- */
+function drawReady(r){
+  if(!r){ $("ready").innerHTML = `<div class="note">—</div>`; return; }
+  $("readystate").textContent = r.ready ? "" : `${r.blocking} to fix`;
+  $("readystate").className = r.ready ? "" : "warnc";
+  $("ready").innerHTML = (r.checks||[]).map(c=>`
+    <div class="check">
+      <div class="m ${c.ok?'y':'n'}">${c.ok?"✓":"!"}</div>
+      <div>
+        <div class="n">${esc(c.name)}</div>
+        <div class="d">${esc(c.detail)}${c.fix?` <b class="warnc">${esc(c.fix)}</b>`:""}</div>
+      </div>
+      <div class="st">${esc(c.state)}</div>
+    </div>`).join("");
+}
+
+/* ---------------- activity feed ---------------- */
+function drawActivity(events){
+  const el = $("feed");
+  if(!events || !events.length){
+    el.innerHTML = `<div class="note">Nothing logged yet. The first entry
+      appears as soon as the feed completes a poll.</div>`;
+    $("feedcount").textContent = "";
+    return;
+  }
+  $("feedcount").textContent = `${events.length} most recent`;
+  el.innerHTML = events.map(e=>{
+    const t = e.t ? new Date(e.t).toLocaleTimeString(undefined,
+      {hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "";
+    return `<div class="ev k-${esc(e.kind)}">
+      <div class="ts">${esc(t)}</div>
+      <div class="k">${esc(e.kind)}</div>
+      <div class="m">${esc(e.summary)}</div>
     </div>`;
   }).join("");
 }
 
 /* ---------------- render ---------------- */
 function render(d){
-  latest = d;
+  latest = d; feedAt = Date.now();
   $("sym").textContent = d.symbol || "MNQ";
   $("profile").textContent = d.profile || "";
   $("stamp").textContent = "updated " + new Date(d.generated_at).toLocaleTimeString();
@@ -478,39 +791,48 @@ function render(d){
     $("chg").className = "delta "+cls(ch);
   }
 
+  paintFeed();
+  headline(d);
+  drawReady(d.readiness);
+  drawActivity(d.activity);
+
   // ---- alpha badge ----
   const a = d.alpha;
   if(a){
     $("grade").textContent = a.grade;
     $("grade").className = "grade g-"+a.grade;
     $("ascore").textContent = fmt(a.score,1) + " / 100";
+    const names = {skill:"Beats guessing", conviction:"Far from a coin flip",
+                   payoff:"Worth the cost", agreement:"Horizons agree"};
     const comp = a.components || {};
     $("comps").innerHTML = Object.entries(comp).map(([k,v])=>
-      `<div class="comp"><div class="n">${k}</div>
+      `<div class="comp"><div class="n">${names[k]||k}</div>
        <div class="t"><i style="width:${Math.round(100*v)}%"></i></div>
        <div class="v">${fmt(v,2)}</div></div>`).join("");
     $("anote").textContent = a.note || "";
-    $("anote").className = "note" + (a.tradeable ? "" : " ");
   } else {
     $("grade").textContent="—"; $("ascore").textContent="—";
-    $("comps").innerHTML=`<div class="note">no alpha yet</div>`;
+    $("comps").innerHTML=`<div class="note">nothing scored yet</div>`;
   }
 
   // ---- trend read ----
   const t = d.trend_read;
   if(t){
     const v = (t.verdict||"unknown").replace(/_/g," ");
-    $("vword").textContent = v.toUpperCase();
+    const plain = {continuation:"LIKELY TO CONTINUE", reversal:"LIKELY TO TURN",
+      neutral:"NO CLEAR LEAN", "no signal":"NOT PREDICTABLE",
+      "no trend":"NO TREND", unknown:"UNKNOWN"};
+    $("vword").textContent = plain[v] || v.toUpperCase();
     $("verdict").className = "verdict " + v.replace(/ /g,"-");
     $("vword").className = "v " + (v==="continuation"?"up":v==="reversal"?"down":"flat");
     $("vnote").textContent = t.note || "";
     rows("vstats", [
-      ["state", (t.state||"—").replace(/_/g," ")],
-      ["slope", fmt(t.strength,3)+" ATR/bar", cls(t.strength)],
-      ["volatility", `${t.vol_state||"—"} (${fmt(100*(t.atr_percentile??0),0)}th pct)`],
-      ["continuation", t.continuation_prob!=null
+      ["what price is doing", (t.state||"—").replace(/_/g," ")],
+      ["how steep", fmt(t.strength,3)+" ATR/bar", cls(t.strength)],
+      ["how volatile", `${t.vol_state||"—"} (busier than ${fmt(100*(t.atr_percentile??0),0)}% of the past year)`],
+      ["kept going, historically", t.continuation_prob!=null
         ? fmt(100*t.continuation_prob,1)+"%" : "—"],
-      ["vs base rate", t.continuation_edge!=null
+      ["vs any random moment", t.continuation_edge!=null
         ? signed(100*t.continuation_edge,1)+"%" : "—",
         cls(t.continuation_edge)],
     ]);
@@ -522,87 +844,104 @@ function render(d){
   const p = d.projection;
   if(p){
     $("dir").textContent = p.direction==="up" ? "▲ UP"
-      : p.direction==="down" ? "▼ DOWN" : "— FLAT";
+      : p.direction==="down" ? "▼ DOWN" : "— NO CALL";
     $("dir").className = "mono " + (p.direction==="up"?"up":p.direction==="down"?"down":"flat");
     $("pts").textContent = p.basis==="unavailable" ? "—"
-      : `${fmt(Math.abs(p.expected_points),0)} pts  ·  conf ${fmt(p.confidence,3)}`;
+      : `${fmt(Math.abs(p.expected_points),0)} pts  ·  confidence ${fmt(p.confidence,3)}`;
     $("projnote").textContent = p.note || "";
     $("projnote").className = "note" + (p.basis!=="calibrated" ? " warnc" : "");
   }
 
   const L = d.levels;
   rows("levels", L ? [
-    ["close", fmt(L.close,2)], ["ATR", fmt(L.atr,1)],
-    ["long TP", fmt(L.long_target,1), "up"], ["long SL", fmt(L.long_stop,1), "down"],
-    ["short TP", fmt(L.short_target,1), "up"], ["short SL", fmt(L.short_stop,1), "down"],
+    ["price now", fmt(L.close,2)],
+    ["typical bar move", fmt(L.atr,1)+" pts"],
+    ["if long — target", fmt(L.long_target,1), "up"],
+    ["if long — stop", fmt(L.long_stop,1), "down"],
+    ["if short — target", fmt(L.short_target,1), "up"],
+    ["if short — stop", fmt(L.short_stop,1), "down"],
   ] : []);
 
   const ind = d.indicators || {};
-  const order = [["RSI","rsi",1],["ADX","adx",1],["ATR","atr",1],["ATR %","atr_pct",2],
-    ["MACD","macd_hist",3],["Slope","slope20",3],["Trend","trend_strength",3],
-    ["Rel vol","rel_volume",2],["VIX pct","vix_percentile",2],
-    ["Risk app.","risk_appetite",2],["Breadth","breadth",3]];
-  rows("ind", order.filter(([,k])=>ind[k]!==undefined).map(([l,k,dp])=>
-    [l, fmt(ind[k],dp),
-     ["macd_hist","slope20","trend_strength","risk_appetite","breadth"].includes(k)
-       ? cls(ind[k]) : ""]));
+  const order = [["Momentum (RSI)","rsi",1],["Trend strength (ADX)","adx",1],
+    ["Typical bar move (ATR)","atr",1],["Bar move %","atr_pct",2],
+    ["Momentum shift (MACD)","macd_hist",3],["20-bar lean","slope20",3],
+    ["Trend direction","trend_strength",3],["Volume vs normal","rel_volume",2],
+    ["Market fear (VIX)","vix_percentile",2],["Risk appetite","risk_appetite",2],
+    ["Index agreement","breadth",3]];
+  $("ind").innerHTML = order.filter(([,k])=>ind[k]!==undefined).map(([l,k,dp])=>{
+    const tone = ["macd_hist","slope20","trend_strength","risk_appetite","breadth"]
+      .includes(k) ? cls(ind[k]) : "";
+    return `<div class="irow"><div class="top"><span>${esc(l)}</span>
+      <span class="${tone}">${fmt(ind[k],dp)}</span></div>
+      <div class="why">${esc(MEANS[k]||"")}</div></div>`;
+  }).join("") || `<div class="note">no readings yet</div>`;
 
-  // ---- autopilot ----
+  // ---- live feed / autopilot ----
   const ap = d.autopilot, st=$("autostate");
   if(ap){
-    st.textContent = ap.running ? "running · paper" : "stopped";
+    const watching = ap.mode === "watch";
+    st.textContent = ap.running ? (watching ? "watching" : "paper trading") : "stopped";
     st.style.color = ap.running ? "var(--up)" : "var(--dim)";
     const s2 = ap.state||{}, when = v => v ? new Date(v).toLocaleTimeString() : "never";
     rows("auto", [
-      ["polls", `${s2.polls??0}${s2.poll_failures?` (${s2.poll_failures} failed)`:""}`],
-      ["last poll", when(s2.last_poll)],
-      ["signals", s2.signals??0],
-      ["bars", (s2.bars??0).toLocaleString()],
-      ["retrains", s2.retrains??0],
+      ["source", d.feed?.source || "—"],
+      ["checks made", `${s2.polls??0}${s2.poll_failures?` (${s2.poll_failures} failed)`:""}`],
+      ["last check", when(s2.last_poll)],
+      ["newest bar", when(s2.last_bar_time)],
+      ["signals taken", s2.signals??0],
+      ["bars held", (s2.bars??0).toLocaleString()],
+      ["retrains", ap.config?.retrain_enabled ? (s2.retrains??0) : "off"],
     ]);
     $("autonote").textContent = s2.retrain_running
-      ? "Retraining — polling and trade management continue."
-      : (s2.last_error ? "Last error: "+s2.last_error : "");
+      ? "Retraining in the background — price checks and trade management continue."
+      : watching
+        ? "Watch-only: it reads the market and writes down what it would do, "
+          + "but opens nothing. Use option 8 to let it record simulated trades."
+        : (s2.last_error ? "Last error: "+s2.last_error : "Simulated trades only — no broker is connected.");
     $("autonote").className = "note" + (s2.last_error ? " warnc" : "");
   } else {
-    st.textContent="not started";
-    rows("auto",[["mode","manual"]]);
-    $("autonote").textContent="Run MNQ.bat option 8 for unattended paper trading.";
+    st.textContent="not running";
+    rows("auto",[["source", d.feed?.source || "cached history"]]);
+    $("autonote").textContent = d.feed?.detail
+      || "No live feed in this process.";
   }
 
   const pp = ap?.paper, dr = ap?.drift;
   rows("paper", (pp && pp.n) ? [
-    ["paper trades", pp.n],
+    ["simulated trades", pp.n],
     ["win rate", fmt(100*pp.win_rate,1)+"%"],
-    ["backtest", dr?.baseline_win_rate!=null ? fmt(100*dr.baseline_win_rate,1)+"%" : "—"],
+    ["backtest said", dr?.baseline_win_rate!=null ? fmt(100*dr.baseline_win_rate,1)+"%" : "—"],
     ["net", "$"+signed(pp.net_usd,2), cls(pp.net_usd)],
-    ["expectancy", "$"+signed(pp.expectancy_usd,2), cls(pp.expectancy_usd)],
-  ] : [["paper trades", 0]]);
+    ["per trade", "$"+signed(pp.expectancy_usd,2), cls(pp.expectancy_usd)],
+  ] : [["simulated trades", 0]]);
   if(dr){
     const tone = {broken:"down",outperforming:"up","no baseline":"warnc"}[dr.verdict]||"";
-    $("drift").innerHTML = `<b class="${tone}">${(dr.verdict||"").toUpperCase()}</b> — ${dr.detail||""}`;
+    $("drift").innerHTML = `<b class="${tone}">${esc((dr.verdict||"").toUpperCase())}</b> — ${esc(dr.detail||"")}`;
   }
 
   const e = d.engine||{};
   rows("engine", Object.keys(e).length ? [
     ["bars stored", (e.bars??0).toLocaleString()],
-    ["open trades", e.open_trades??0],
-    ["models", e.models_loaded ? "loaded" : "not loaded"],
+    ["open simulated trades", e.open_trades??0],
+    ["model", e.models_loaded ? "loaded" : "not trained yet"],
   ] : [["state","not running"]]);
 
   const tb = $("calib").querySelector("tbody"), cal = d.calibration||[];
   tb.innerHTML = cal.length ? cal.map(r=>`<tr>
-      <td>${r.side}</td><td>${fmt(r.lo,2)}–${fmt(r.hi,2)}</td><td>${r.n}</td>
+      <td>${esc(r.side)}</td><td>${fmt(r.lo,2)}–${fmt(r.hi,2)}</td><td>${r.n}</td>
       <td>${fmt(100*r.hit_rate,1)}%</td>
       <td class="${cls(r.p25_points)}">${signed(r.p25_points,0)}</td>
       <td class="${cls(r.median_points)}">${signed(r.median_points,0)}</td>
       <td class="${cls(r.p75_points)}">${signed(r.p75_points,0)}</td></tr>`).join("")
-    : `<tr><td colspan="7" style="color:var(--dim)">no calibration yet — run
-       <code>train</code> then <code>backtest</code></td></tr>`;
+    : `<tr><td colspan="7" style="color:var(--dim)">No track record yet — run
+       option 3 to train and backtest.</td></tr>`;
 
   drawChart(d.chart||{}, d.levels, d.path);
   $("chartnote").textContent = bars.length
-    ? "Left of NOW is measured. Right is projected: solid ribbons are horizons with measured skill, faint ones are shown for completeness only."
+    ? "Everything left of NOW actually happened. Everything right of it is a "
+    + "projection: solid shading is a horizon the system can beat a coin flip on, "
+    + "faint shading is shown for completeness only."
     : "";
 }
 
@@ -616,10 +955,16 @@ async function tick(){
     $("error").hidden=false;
     $("error").textContent = "cannot reach the server: "+err.message;
     $("stamp").textContent="disconnected";
+    $("dot").className = "dot bad";
+    $("livew").textContent = "disconnected";
   }
 }
 tick();
-setInterval(tick, 15000);
+setInterval(tick, 5000);
+// The countdown runs locally so the page keeps moving between fetches; without
+// it "next in 47s" would sit still for five seconds at a time and read as
+// frozen.
+feedClock = setInterval(paintFeed, 1000);
 window.addEventListener("resize", ()=> latest &&
   drawChart(latest.chart||{}, latest.levels, latest.path));
 </script>

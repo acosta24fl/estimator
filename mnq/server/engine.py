@@ -30,6 +30,7 @@ import pandas as pd
 from ..config import Config
 from ..data.store import BarStore
 from ..features.builder import add_session_features, build_feature_matrix
+from ..journal import DecisionLog, NullLog
 from ..labeling import LONG, SHORT
 from ..models.train import load_bundle
 from ..notify.telegram import TelegramNotifier, format_heartbeat
@@ -42,13 +43,25 @@ log = logging.getLogger(__name__)
 class LiveEngine:
     """Stateful live signal generator and position monitor."""
 
-    def __init__(self, cfg: Config, store: BarStore | None = None, load_models: bool = True):
+    def __init__(
+        self,
+        cfg: Config,
+        store: BarStore | None = None,
+        load_models: bool = True,
+        journal: DecisionLog | None = None,
+    ):
         self.cfg = cfg
-        self.store = store or BarStore(
+        # `store or BarStore(...)` looks equivalent and is not: BarStore defines
+        # __len__, so an *empty* injected store is falsy and gets silently
+        # replaced by one pointing at the real bar file. A test that passed a
+        # scratch store would quietly read and write the live cache instead.
+        self.store = store if store is not None else BarStore(
             cfg.path(cfg.server.bar_store_path), cfg.server.max_bars_retained
         )
         self.notifier = TelegramNotifier(cfg.telegram)
         self.manager = TradeManager(cfg.trade)
+        # NullLog rather than None so every call site can log unconditionally.
+        self.journal: DecisionLog = journal if journal is not None else NullLog()
 
         self._lock = threading.RLock()
         self.open_trades: list[Trade] = []
@@ -66,10 +79,23 @@ class LiveEngine:
                     "loaded models trained at %s (%d features)",
                     self.bundle["trained_at"], len(self.bundle["feature_names"]),
                 )
+                self.journal.record(
+                    "system",
+                    f"Models loaded ({len(self.bundle['feature_names'])} features, "
+                    f"trained {self.bundle['trained_at']}).",
+                    models_loaded=True,
+                )
             except FileNotFoundError as exc:
                 # Not fatal: the webhook should still accept and store bars so
                 # history accumulates while a model is being trained.
                 log.error("%s — running in data-collection mode only", exc)
+                self.journal.record(
+                    "system",
+                    "No trained models found, so no directional prediction can "
+                    "be made. Bars are still being collected. Run option 3 to "
+                    "train.",
+                    models_loaded=False, detail=str(exc),
+                )
 
     # ------------------------------------------------------------ ingestion
 
@@ -144,10 +170,23 @@ class LiveEngine:
                             "points": round(trade.realised_points, 2),
                         }
                     )
+                    side = "LONG" if trade.direction == LONG else "SHORT"
                     log.info(
-                        "closed %s: %s %.1f pts",
-                        "LONG" if trade.direction == LONG else "SHORT",
+                        "closed %s: %s %.1f pts", side,
                         trade.exit_reason, trade.realised_points,
+                    )
+                    won = trade.realised_points > 0
+                    self.journal.record(
+                        "exit",
+                        f"Closed the simulated {side} for "
+                        f"{trade.realised_points:+.1f} points "
+                        f"(${trade.realised_points * 2.0 * trade.contracts:+,.2f}) — "
+                        f"{'a win' if won else 'a loss'}, reason: "
+                        f"{trade.exit_reason.replace('_', ' ')}.",
+                        side=side, reason=trade.exit_reason,
+                        points=trade.realised_points,
+                        entry=trade.entry_price, exit=trade.exit_price,
+                        contracts=trade.contracts, win=won,
                     )
 
             self.open_trades = still_open
@@ -238,6 +277,99 @@ class LiveEngine:
 
     # ------------------------------------------------------- signal cadence
 
+    def _blocking_reason(self, now: datetime) -> str | None:
+        """Why a new entry cannot be considered right now, in plain English."""
+        if self.bundle is None:
+            return "no trained model is loaded, so nothing can be scored"
+        if len(self.open_trades) >= self.cfg.trade.max_concurrent_trades:
+            return (
+                f"already holding {len(self.open_trades)} simulated position(s), "
+                f"the maximum is {self.cfg.trade.max_concurrent_trades}"
+            )
+        if self._in_cooldown(now):
+            minutes = self.cfg.trade.cooldown_bars * 5
+            return f"in the {minutes}-minute cooldown after the last signal"
+        return None
+
+    def observe(self) -> dict[str, Any] | None:
+        """Score the current bar and write down the decision, entering nothing.
+
+        This is what the dashboard's watch-only feed runs. It produces exactly
+        the reasoning ``evaluate`` would produce - the same probabilities
+        against the same thresholds - and records it, so a reader can see the
+        system working and see *why* it is not signalling. Silence and a dead
+        process look identical without this.
+        """
+        with self._lock:
+            now = datetime.now(timezone.utc)
+            self.last_evaluation = now
+
+            if self.bundle is None:
+                self.journal.record(
+                    "score",
+                    "Checked for a setup: cannot score, no trained model is "
+                    "loaded. Run option 3 to train one.",
+                    scored=False, reason="no_model",
+                )
+                return None
+
+            scored = self.score_latest()
+            if scored is None:
+                self.journal.record(
+                    "score",
+                    "Checked for a setup: not enough warmed-up history to score "
+                    "this bar yet.",
+                    scored=False, reason="warmup",
+                )
+                return None
+
+            self._record_score(scored)
+            choice = select_direction(scored["p_long"], scored["p_short"], self.cfg.trade)
+            blocked = self._blocking_reason(now)
+            if choice is None:
+                self.journal.record(
+                    "gate", self._no_setup_summary(scored),
+                    decision="no_setup", would_trade=False,
+                    p_long=scored["p_long"], p_short=scored["p_short"],
+                    threshold=self.cfg.trade.min_probability,
+                )
+            else:
+                direction, prob = choice
+                side = "LONG" if direction == LONG else "SHORT"
+                self.journal.record(
+                    "gate",
+                    f"A {side} setup cleared the {self.cfg.trade.min_probability:.0%} "
+                    f"confidence bar at {prob:.1%}"
+                    + (f", but no position was opened because {blocked}."
+                       if blocked else
+                       ". Watch-only mode is on, so nothing was opened."),
+                    decision="setup", would_trade=not blocked, side=side,
+                    probability=prob, blocked_by=blocked, watch_only=True,
+                )
+            return scored
+
+    def _record_score(self, scored: dict[str, Any]) -> None:
+        self.journal.record(
+            "score",
+            f"Scored {self.cfg.data.symbol} at {scored['close']:,.2f}: "
+            f"{scored['p_long']:.1%} confidence a long works, "
+            f"{scored['p_short']:.1%} a short. Needs "
+            f"{self.cfg.trade.min_probability:.0%} to act.",
+            close=scored["close"], atr=scored["atr"],
+            p_long=scored["p_long"], p_short=scored["p_short"],
+            fwd_pred=scored["fwd_pred"], bar=str(scored["timestamp"]),
+        )
+
+    def _no_setup_summary(self, scored: dict[str, Any]) -> str:
+        best = max(scored["p_long"], scored["p_short"])
+        side = "long" if scored["p_long"] >= scored["p_short"] else "short"
+        gap = self.cfg.trade.min_probability - best
+        return (
+            f"No setup. The strongest read was {best:.1%} for a {side}, "
+            f"{gap:.1%} short of the {self.cfg.trade.min_probability:.0%} "
+            f"needed. Standing aside is the correct action here."
+        )
+
     def evaluate(self, force: bool = False) -> Signal | None:
         """Run one signal evaluation. Called on the 10-minute cadence."""
         with self._lock:
@@ -245,25 +377,38 @@ class LiveEngine:
             self._roll_day(now)
             self.last_evaluation = now
 
-            if self.bundle is None:
-                log.debug("no models loaded; evaluation skipped")
-                return None
-            if len(self.open_trades) >= self.cfg.trade.max_concurrent_trades and not force:
-                log.debug("max concurrent trades reached; not evaluating entries")
-                return None
-            if self._in_cooldown(now) and not force:
-                log.debug("in cooldown; not evaluating entries")
+            blocked = self._blocking_reason(now)
+            if blocked and not (force and self.bundle is not None):
+                log.debug("not evaluating entries: %s", blocked)
+                self.journal.record(
+                    "gate",
+                    f"Did not look for a new trade: {blocked}.",
+                    decision="skipped", reason=blocked,
+                )
                 return None
 
             scored = self.score_latest()
             if scored is None:
+                self.journal.record(
+                    "score",
+                    "Tried to score the current bar and could not — the "
+                    "feature warm-up is incomplete.",
+                    scored=False, reason="warmup",
+                )
                 return None
+            self._record_score(scored)
 
             choice = select_direction(scored["p_long"], scored["p_short"], self.cfg.trade)
             if choice is None:
                 log.info(
                     "no signal (p_long=%.3f p_short=%.3f, need %.2f)",
                     scored["p_long"], scored["p_short"], self.cfg.trade.min_probability,
+                )
+                self.journal.record(
+                    "gate", self._no_setup_summary(scored),
+                    decision="no_setup", p_long=scored["p_long"],
+                    p_short=scored["p_short"],
+                    threshold=self.cfg.trade.min_probability,
                 )
                 return None
             direction, prob = choice
@@ -287,10 +432,21 @@ class LiveEngine:
                 },
             )
             if signal is None:
+                target = scored["atr"] * self.cfg.labels.tp_atr_mult
                 log.info(
                     "setup rejected by gates (atr=%.1f, target=%.1f pts < %.1f min)",
-                    scored["atr"], scored["atr"] * self.cfg.labels.tp_atr_mult,
-                    self.cfg.trade.min_edge_points,
+                    scored["atr"], target, self.cfg.trade.min_edge_points,
+                )
+                self.journal.record(
+                    "gate",
+                    f"A {name.upper()} setup was strong enough ({prob:.1%}) but "
+                    f"rejected: the move on offer is only {target:.0f} points "
+                    f"and the system will not trade for less than "
+                    f"{self.cfg.trade.min_edge_points:.0f}. The market is too "
+                    f"quiet right now to pay for the round trip.",
+                    decision="rejected", reason="target_too_small", side=name.upper(),
+                    probability=prob, target_points=target,
+                    min_edge_points=self.cfg.trade.min_edge_points, atr=scored["atr"],
                 )
                 return None
 
@@ -312,6 +468,17 @@ class LiveEngine:
             log.info(
                 "SIGNAL %s @ %.2f stop %.2f target %.2f p=%.3f",
                 signal.side, signal.entry, signal.stop, signal.target, prob,
+            )
+            self.journal.record(
+                "signal",
+                f"Opened a simulated {signal.side} at {signal.entry:,.2f}. "
+                f"Target {signal.target:,.2f} "
+                f"({abs(signal.target - signal.entry):.0f} points), stop "
+                f"{signal.stop:,.2f} ({abs(signal.entry - signal.stop):.0f} "
+                f"points), confidence {prob:.1%}. No real order was placed.",
+                side=signal.side, entry=signal.entry, stop=signal.stop,
+                target=signal.target, probability=prob, atr=signal.atr,
+                contracts=self.cfg.trade.contracts,
             )
             self._save_state()
             return signal
@@ -359,6 +526,13 @@ class LiveEngine:
                 self.closed_trades.append(trade)
                 self.notifier.send_exit(trade, "Flattened by operator request.")
                 closed.append(trade)
+            if closed:
+                self.journal.record(
+                    "exit",
+                    f"Flattened {len(closed)} simulated position(s) on request "
+                    f"({reason.replace('_', ' ')}).",
+                    reason=reason, n=len(closed),
+                )
             self.open_trades = []
             self._save_state()
             return closed

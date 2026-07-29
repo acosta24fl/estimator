@@ -105,12 +105,26 @@ def create_app(
 
     # --------------------------------------------------------- dashboard
     # Cached because rebuilding the feature matrix on every poll would make the
-    # page's own refresh the heaviest thing the process does.
+    # page's own refresh the heaviest thing the process does. Three seconds is
+    # short enough that the countdown and heartbeat move visibly, and long
+    # enough that a browser refresh cannot pin a core.
     _cache: dict[str, Any] = {"at": None, "payload": None}
+    SNAPSHOT_TTL = 3.0
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard_page() -> str:
         return dashboard.read_page()
+
+    @app.get("/api/activity")
+    async def activity(limit: int = 60) -> dict[str, Any]:
+        """The decision log, newest first."""
+        journal = getattr(_engine, "journal", None)
+        if journal is None:
+            return {"events": [], "stats": {}}
+        return {
+            "events": journal.tail(max(1, min(limit, 500))),
+            "stats": journal.stats(),
+        }
 
     @app.get("/api/snapshot")
     async def snapshot(bars: int = dashboard.DEFAULT_BARS) -> dict[str, Any]:
@@ -119,11 +133,17 @@ def create_app(
         now = datetime.now(timezone.utc)
         fresh = (
             _cache["at"] is not None
-            and (now - _cache["at"]).total_seconds() < 10
+            and (now - _cache["at"]).total_seconds() < SNAPSHOT_TTL
             and _cache["payload"] is not None
         )
         if fresh:
-            return _cache["payload"]
+            # The countdown is the page's proof of life, so it must keep moving
+            # even while the expensive half of the payload is being reused.
+            cached = dict(_cache["payload"])
+            if _autopilot is not None:
+                cached["feed"] = _autopilot.feed_status()
+            cached["generated_at"] = now.isoformat()
+            return cached
 
         matrix = score = None
         if _engine is not None:
@@ -147,6 +167,9 @@ def create_app(
             calibration=calibration, limit=bars,
             autopilot=_autopilot.status() if _autopilot is not None else None,
             horizons=horizons, trend_read=trend_read, alpha=alpha, path=path,
+            activity=(
+                _engine.journal.tail(40) if _engine is not None else []
+            ),
         )
         _cache["at"], _cache["payload"] = now, payload
         return payload

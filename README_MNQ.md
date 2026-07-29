@@ -47,7 +47,7 @@ So the constraint really was sample size. Training now
 **What remains unproven is profit.** AUC 0.578 is a small edge, and small
 edges die to costs. Read the PROFITABILITY block, not the backtest total.
 
-What has been verified is the machinery: 342 tests pass, including the lookahead
+What has been verified is the machinery: 382 tests pass, including the lookahead
 tests that decide whether any performance number can be believed at all.
 
 Two synthetic controls bracket the pipeline's behaviour, and together they are
@@ -355,12 +355,49 @@ python -m mnq.cli dashboard --open      # or MNQ.bat -> option 7
 Serves a page on `http://localhost:8000` showing the candle chart with EMA
 overlays, the model's direction and expected move in points, realised trend
 over several windows, the ATR target and stop levels, live indicator values,
-and engine state. It refreshes every 15 seconds.
+and engine state.
+
+**It pulls its own prices.** Every 60 seconds (`--poll`) it fetches fresh
+1-minute bars from Yahoo Finance, merges them into the store and re-reads the
+market; the browser re-renders every 5 seconds. Nothing needs refreshing by
+hand. `--no-live` turns the polling off and shows the cached history only.
+
+The dashboard runs **watch-only**: it performs exactly the same reasoning the
+autopilot does — same probabilities, same thresholds — writes down what it
+would have done, and opens nothing. Option 8 is the same page with simulated
+trades switched on.
+
+This matters because the page previously seeded from the cache and then never
+moved. A dashboard rendering a fresh timestamp over prices that stopped
+updating at launch is worse than one showing nothing, because it manufactures
+confidence in stale numbers.
+
+The header carries a heartbeat: a pulsing dot, the age of the last check, and
+a countdown to the next one. Its states are deliberately distinct —
+
+| State | Meaning |
+| --- | --- |
+| **live** | prices arriving on schedule |
+| **market quiet** | connected, but the newest bar is over 15 minutes old |
+| **feed down** | consecutive failed polls; prices on screen are the last good ones |
+| **not live** | nothing is pulling prices |
+
+"Running" and "fresh" are separate claims. A feed that polls successfully and
+receives nothing new is the failure mode that looks healthiest from a poll
+counter alone, so it gets its own state rather than being folded into *live*.
 
 Everything is served from the same process — no CDN, no external scripts, no
 API keys — so it works offline and nothing about what you are watching leaves
 the machine. The chart is drawn directly to a canvas; there is no charting
 library to break.
+
+### System check
+
+A blank projection has several possible causes — no trained model, not enough
+history, a cold feed, an incomplete warm-up — and all of them render as the
+same empty panel. The **System check** card names which one it is and what to
+do about it, rather than leaving the reader to guess whether the system is
+broken or simply has nothing to say.
 
 The overlays are *read back from the feature matrix* rather than recomputed.
 A dashboard that calculated its own EMAs would eventually disagree with the
@@ -440,6 +477,45 @@ win rate a losing stretch of that size is ordinary, and a system that cried
 | **broken** | a real gap, not a losing streak. Stop and re-examine |
 | **outperforming** | above backtest — treat as luck until it persists |
 
+### The decision log
+
+Every observable step is appended to `artifacts/decisions.jsonl` as it
+happens, and shown live on the page under **What the system is doing**:
+
+| Kind | Written when |
+| --- | --- |
+| `system` | start, stop, models loaded or missing |
+| `poll` | market data fetched — how many bars were new |
+| `score` | the model's probabilities for the current bar |
+| `gate` | a setup considered and accepted or rejected, with the reason |
+| `signal` | a simulated position opened, with its levels |
+| `exit` | a position closed, with the outcome |
+| `retrain` | a refit started or finished |
+| `error` | a failed poll, read or refit |
+
+The rejections are the valuable half. "Why did it skip that move?" is the
+question that improves a trading system, and before this the answer lived only
+in stdout — gone the moment the window closed. The paper journal records closed
+trades, which is the *end* of a decision; nothing recorded the far more common
+event of looking and choosing not to act.
+
+Every record carries a `summary` written in plain English, and the dashboard
+prints that string verbatim:
+
+```
+14:22:31  gate    No setup. The strongest read was 51.4% for a long, 6.6%
+                  short of the 58% needed. Standing aside is the correct
+                  action here.
+14:23:31  poll    Pulled 1 new 1-minute bar(s) from Yahoo Finance. Last
+                  price 21,884.25. 28,846 bars held.
+```
+
+Format is JSON Lines: one self-describing object per line, appended, never
+rewritten. `DecisionLog.load()` returns the whole file as a time-indexed
+DataFrame. A record truncated by a Ctrl+C mid-write costs one line, not the
+file, and writes never raise — a loop that died because a disk filled up would
+have turned an observability feature into an outage.
+
 ### Reliability
 
 The loop catches exceptions per cycle rather than per run. A crash in one
@@ -511,18 +587,45 @@ looks.
 
 ### The dashboard
 
-Its organising rule is **visual weight encodes evidence**:
+It has two organising rules.
 
+**Visual weight encodes evidence.** Anything the system cannot statistically
+support is rendered faint, hatched and desaturated; full contrast is reserved
+for measured skill. Most dashboards render every number at equal weight, which
+is how a confident-looking figure with nothing behind it gets believed.
+
+**Every number carries its own explanation.** This is a second opinion for
+someone about to risk money, not a telemetry readout. A reader who does not
+know what "p90" or "ATR" means must still be able to act on what they see, so
+the jargon is always accompanied by the sentence it stands for.
+
+- **Headline** — the entire page in one sentence, at the top. Either *"No edge
+  right now. Nothing on this screen is worth acting on"*, or the direction, the
+  horizon and the typical move in points.
 - **Forward cone** — the chart extends past NOW with quantile ribbons. Skilled
   horizons draw solid; unskilled ones are barely visible.
-- **Horizon ladder** — one rung per horizon, each a band showing where price
-  landed historically from this state, with the median as a notch and no-change
-  as a hairline. Rungs without skill are dimmed and hatched. The axis is
-  signed-square-root scaled, or the 24h band (hundreds of points) would squash
-  the 5m band (a few points) into a flat line.
+- **Horizon ladder** (*Where price could be later*) — one row per horizon.
+  The time column reads "In 30 minutes", not "30m". Each row shows the likely
+  price, the move in points, and a verdict of **USABLE** or **JUST NOISE**. The
+  band shows where price landed historically from this state: solid block is
+  the middle half of outcomes, faint block reaches the 10th–90th, the notch is
+  the median and the hairline is no change. The axis is signed-square-root
+  scaled, or the 24h band (hundreds of points) would squash the 5m band (a few
+  points) into a flat line. An inline *How to read this* explains the whole
+  panel without assuming any vocabulary.
 - **Trend read** — continuation or reversal, always judged against the
   unconditional base rate, so 55% continuation in a market that rises 55% of
-  the time is correctly reported as noise.
+  the time is correctly reported as noise. Rendered as *LIKELY TO CONTINUE* /
+  *LIKELY TO TURN* / *NOT PREDICTABLE*.
+- **Why that grade** — the four alpha components, labelled by what they
+  measure: *Beats guessing*, *Far from a coin flip*, *Worth the cost*,
+  *Horizons agree*.
+- **Market conditions** — every indicator with a sentence under it saying what
+  it tells you ("Trend strength. Above 25 is a real trend; below 20 is chop.").
+
+Most of the time most rungs read JUST NOISE and the headline says there is no
+edge. That is the honest state of a market this efficient. A panel that
+found something to say every minute would be the broken one.
 
 ---
 
@@ -751,12 +854,16 @@ mnq/
     signals.py         entry/stop/target construction and gating
   notify/telegram.py   message formatting and delivery
   models/projection.py calibrated direction + expected move in points
+  models/horizon.py    multi-horizon forecasts, skill scoring, alpha grade
+  journal.py           the decision log: every action, in plain English
+  paper.py             simulated-trade journal + live-vs-backtest drift test
+  autopilot.py         the polling loop; watch-only or paper trading
   server/
     engine.py          live signal generation and monitoring
     app.py             FastAPI webhook + 10-minute scheduler + dashboard API
-    dashboard.py       snapshot payloads for the local page
+    dashboard.py       snapshot payloads, readiness checks, for the local page
     static/dashboard.html  self-contained page, canvas chart, no CDN
-tests/                 342 tests
+tests/                 382 tests
 ```
 
 ## Tests
