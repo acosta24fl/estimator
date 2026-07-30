@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>MNQ Live Dashboard</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230e1117'/%3E%3Cpath d='M5 22l6-7 5 4 4-6 7 9' stroke='%232e9e6b' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="ident">
+    <div class="symbol" id="symbol">MNQ=F</div>
+    <div class="name" id="displayName">Micro E-mini Nasdaq-100</div>
+  </div>
+
+  <div class="quote">
+    <div class="price" id="price">—</div>
+    <div class="change" id="change">—</div>
+  </div>
+
+  <div class="feedstate">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusText">connecting…</span>
+  </div>
+</header>
+
+<nav class="timeframes" id="timeframes" aria-label="Timeframe"></nav>
+
+<main>
+  <section class="chart-wrap">
+    <div id="chart"></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="metrics" id="metrics"></section>
+</main>
+
+<footer class="statusbar" id="statusbar"></footer>
+
+<script src="/static/vendor/lightweight-charts.standalone.production.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
