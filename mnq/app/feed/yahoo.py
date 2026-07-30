@@ -14,7 +14,9 @@ up by this app's own append-only minute log as it runs.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 import time
 from typing import Any
 
@@ -28,18 +30,39 @@ log = logging.getLogger(__name__)
 
 _HOSTS = ("https://query1.finance.yahoo.com", "https://query2.finance.yahoo.com")
 
-# Yahoo rejects requests without a browser-like User-Agent.
+# Pages visited purely to be handed session cookies. fc.yahoo.com answers 404
+# but still sets them, which is the cheapest route; the finance page is the
+# fallback for regions where that host misbehaves.
+_COOKIE_URLS = ("https://fc.yahoo.com", "https://finance.yahoo.com")
+_CRUMB_URL = "https://query1.finance.yahoo.com/v1/test/getcrumb"
+
+# Yahoo rejects or throttles requests that do not look like a browser.
 _HEADERS = {
     "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/125.0 Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     ),
     "Accept": "application/json,text/plain,*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Origin": "https://finance.yahoo.com",
+    "Referer": "https://finance.yahoo.com/",
+    "Connection": "keep-alive",
 }
+
+_MAX_ATTEMPTS = 3
+_BACKOFF_CAP = 20.0
 
 
 class YahooError(RuntimeError):
     pass
+
+
+class YahooRateLimited(YahooError):
+    """Yahoo answered 429. Carries the server's Retry-After when given."""
+
+    def __init__(self, message: str, retry_after: float | None = None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
 
 
 @register
@@ -54,9 +77,56 @@ class YahooFeed(PriceFeed):
             timeout=settings.request_timeout,
             follow_redirects=True,
         )
+        self._crumb: str | None = None
+        self._has_session = False
 
     async def aclose(self) -> None:
         await self._client.aclose()
+
+    # -- session -----------------------------------------------------------
+
+    async def _ensure_session(self, force: bool = False) -> None:
+        """Pick up the cookies (and crumb) Yahoo expects from a browser.
+
+        Since 2024 the chart endpoint throttles cookie-less clients with 429
+        almost immediately. Visiting a Yahoo page first yields the session
+        cookies; ``/v1/test/getcrumb`` then returns the token that goes with
+        them. The crumb is optional for charts, so a failure there is not
+        fatal — the cookies alone lift the throttling.
+        """
+        if self._has_session and not force:
+            return
+
+        self._crumb = None
+        self._client.cookies.clear()
+
+        for url in _COOKIE_URLS:
+            try:
+                await self._client.get(url)
+            except Exception as exc:
+                log.debug("cookie bootstrap via %s failed: %s", url, exc)
+                continue
+            if len(self._client.cookies):
+                break
+
+        if not len(self._client.cookies):
+            log.warning("Yahoo returned no session cookies; requests may be throttled")
+
+        try:
+            resp = await self._client.get(_CRUMB_URL)
+            crumb = resp.text.strip()
+            # A valid crumb is a short opaque token, never an HTML error page.
+            if resp.status_code == 200 and crumb and "<" not in crumb and len(crumb) < 40:
+                self._crumb = crumb
+        except Exception as exc:
+            log.debug("crumb fetch failed: %s", exc)
+
+        self._has_session = True
+        log.info(
+            "Yahoo session ready (%d cookies, crumb=%s)",
+            len(self._client.cookies),
+            "yes" if self._crumb else "no",
+        )
 
     # -- public API --------------------------------------------------------
 
@@ -73,33 +143,73 @@ class YahooFeed(PriceFeed):
     # -- transport ---------------------------------------------------------
 
     async def _chart(self, interval: str, range_: str) -> dict[str, Any]:
-        params = {
+        await self._ensure_session()
+
+        params: dict[str, Any] = {
             "range": range_,
             "interval": interval,
             "includePrePost": "true",
             "events": "div,splits",
         }
+        if self._crumb:
+            params["crumb"] = self._crumb
+
         last_error: Exception | None = None
-        for host in _HOSTS:
-            url = f"{host}/v8/finance/chart/{self.settings.symbol}"
-            try:
-                resp = await self._client.get(url, params=params)
-                resp.raise_for_status()
-                body = resp.json()
-            except Exception as exc:  # network, HTTP, or JSON failure
-                last_error = exc
-                log.warning("yahoo request failed on %s: %s", host, exc)
-                continue
+        throttled = False
 
-            chart = body.get("chart") or {}
-            if chart.get("error"):
-                raise YahooError(str(chart["error"]))
-            results = chart.get("result") or []
-            if not results:
-                last_error = YahooError("empty chart result")
-                continue
-            return results[0]
+        for attempt in range(_MAX_ATTEMPTS):
+            for host in _HOSTS:
+                url = f"{host}/v8/finance/chart/{self.settings.symbol}"
+                try:
+                    resp = await self._client.get(url, params=params)
+                except Exception as exc:  # transport failure
+                    last_error = exc
+                    log.debug("yahoo request failed on %s: %s", host, exc)
+                    continue
 
+                if resp.status_code in (401, 403, 429):
+                    throttled = resp.status_code == 429
+                    last_error = YahooRateLimited(
+                        f"{resp.status_code} from {host}", _retry_after(resp)
+                    )
+                    # A stale or missing session is the usual cause; rebuild it
+                    # once and let the retry use the fresh cookies.
+                    self._has_session = False
+                    continue
+
+                try:
+                    resp.raise_for_status()
+                    body = resp.json()
+                except Exception as exc:
+                    last_error = exc
+                    log.debug("bad response from %s: %s", host, exc)
+                    continue
+
+                chart = body.get("chart") or {}
+                if chart.get("error"):
+                    raise YahooError(str(chart["error"]))
+                results = chart.get("result") or []
+                if not results:
+                    last_error = YahooError("empty chart result")
+                    continue
+                return results[0]
+
+            if attempt + 1 < _MAX_ATTEMPTS:
+                delay = _backoff_delay(attempt, last_error)
+                log.debug("retrying Yahoo in %.1fs (%s)", delay, last_error)
+                await asyncio.sleep(delay)
+                await self._ensure_session()
+                if self._crumb:
+                    params["crumb"] = self._crumb
+                else:
+                    params.pop("crumb", None)
+
+        if throttled:
+            raise YahooRateLimited(
+                "Yahoo is rate limiting this client (429). It usually clears on "
+                "its own; raise MNQ_POLL_SECONDS if it persists.",
+                getattr(last_error, "retry_after", None),
+            )
         raise YahooError(f"all Yahoo hosts failed: {last_error}")
 
     # -- parsing -----------------------------------------------------------
@@ -164,6 +274,25 @@ class YahooFeed(PriceFeed):
             currency=str(meta.get("currency") or "USD"),
             exchange=str(meta.get("fullExchangeName") or meta.get("exchangeName") or ""),
         )
+
+
+def _retry_after(resp) -> float | None:
+    raw = resp.headers.get("Retry-After")
+    if not raw:
+        return None
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return None  # HTTP-date form; the default backoff covers it
+
+
+def _backoff_delay(attempt: int, error: Exception | None) -> float:
+    """Exponential backoff with jitter, honouring Retry-After when present."""
+    retry_after = getattr(error, "retry_after", None)
+    if retry_after:
+        return min(float(retry_after), _BACKOFF_CAP)
+    base = min(2.0 * (2**attempt), _BACKOFF_CAP)
+    return base * (0.6 + random.random() * 0.4)
 
 
 def _at(seq: list, i: int):

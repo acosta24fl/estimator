@@ -46,6 +46,7 @@ class Engine:
         self.last_error: str | None = None
         self.poll_count = 0
         self.error_count = 0
+        self.consecutive_errors = 0
 
     # -- lifecycle ---------------------------------------------------------
 
@@ -65,12 +66,25 @@ class Engine:
                 pass
         await self.feed.aclose()
 
+    #: Longest gap between polls once the feed is failing.
+    max_backoff_seconds = 300.0
+
+    def next_delay(self) -> float:
+        """Poll interval, stretched while the feed keeps failing.
+
+        Retrying a rate-limited endpoint on the normal cadence only deepens the
+        throttling, so each consecutive failure doubles the wait up to a cap.
+        One success resets it.
+        """
+        if not self.consecutive_errors:
+            return self.settings.poll_seconds
+        stretched = self.settings.poll_seconds * (2**self.consecutive_errors)
+        return min(stretched, self.max_backoff_seconds)
+
     async def _loop(self) -> None:
         while not self._stopping.is_set():
             try:
-                await asyncio.wait_for(
-                    self._stopping.wait(), timeout=self.settings.poll_seconds
-                )
+                await asyncio.wait_for(self._stopping.wait(), timeout=self.next_delay())
                 return  # stop requested
             except asyncio.TimeoutError:
                 pass
@@ -88,10 +102,17 @@ class Engine:
             self.last_poll_ts = now
             self.poll_count += 1
             self.last_error = None
+            self.consecutive_errors = 0
         except Exception as exc:
             self.error_count += 1
+            self.consecutive_errors += 1
             self.last_error = f"{type(exc).__name__}: {exc}"
-            log.warning("intraday poll failed: %s", self.last_error)
+            log.warning(
+                "intraday poll failed (%d in a row, next try in %.0fs): %s",
+                self.consecutive_errors,
+                self.next_delay(),
+                self.last_error,
+            )
 
         due = (now - self.last_daily_ts) >= self.settings.daily_refresh_seconds
         if include_daily or due:
@@ -248,6 +269,8 @@ class Engine:
             "last_error": self.last_error,
             "poll_count": self.poll_count,
             "error_count": self.error_count,
+            "consecutive_errors": self.consecutive_errors,
+            "next_poll_seconds": round(self.next_delay(), 1),
             "minute_bars": self.store.minute_count,
             "daily_bars": self.store.daily_count,
             "bars_logged": self.store.logged_count,
