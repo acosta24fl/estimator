@@ -29,6 +29,7 @@ const state = {
   socket: null,
   reconnectDelay: 1000,
   lastSnapshotAt: 0,
+  needsFit: true,
 };
 
 const el = (id) => document.getElementById(id);
@@ -55,7 +56,10 @@ function chartOptions() {
       borderColor: grid,
       timeVisible: true,
       secondsVisible: false,
-      rightOffset: 4,
+      // Empty space at the right edge is where the forward projection is
+      // drawn — without it the ray would be clipped against the price axis.
+      rightOffset: 12,
+      barSpacing: 9,
       // Axis labels in the viewer's local time rather than UTC.  The chart
       // tells us what granularity each tick represents, which is what makes
       // daily bars show dates and intraday bars show clock times.
@@ -97,6 +101,7 @@ function buildChart(config) {
   const container = el("chart");
   container.innerHTML = "";
   state.series.clear();
+  state.needsFit = true;
 
   const chart = createChart(container, chartOptions());
   state.chart = chart;
@@ -129,7 +134,7 @@ function buildChart(config) {
         color: spec.color,
         lineWidth: spec.line_width,
         lineStyle: spec.line_style,
-        priceLineVisible: false,
+        priceLineVisible: spec.price_line === true,
         lastValueVisible: paneIndex === 0,
         crosshairMarkerVisible: spec.type === "line",
         priceFormat: { type: "price", precision: render.precision, minMove: 0.01 },
@@ -242,6 +247,14 @@ function applySnapshot(snap) {
 
   markers.sort((a, b) => a.time - b.time);
   state.markers.setMarkers(markers);
+
+  // Frame the recent action on first paint and on a timeframe switch, but
+  // never afterwards — yanking the view back while someone is scrolling
+  // through history would make the chart unusable.
+  if (state.needsFit) {
+    state.needsFit = false;
+    state.chart.timeScale().scrollToRealTime();
+  }
 
   renderQuote(snap);
   renderMetrics(snap);
@@ -359,6 +372,7 @@ function renderTimeframes() {
 function selectTimeframe(key) {
   if (key === state.timeframe) return;
   state.timeframe = key;
+  state.needsFit = true;
   localStorage.setItem("mnq.timeframe", key);
   renderTimeframes();
   send({ type: "subscribe", tf: key });

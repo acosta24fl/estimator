@@ -84,6 +84,8 @@ Restart. RSI now has its own pane and a metrics card. Nothing else changed.
 | `ctx.minute_bars` | the raw 1-minute series |
 | `ctx.daily_bars` | daily series, for higher-timeframe context |
 | `ctx.session` | session bucketer — `ctx.session.start(ts)` groups by trade date |
+| `ctx.bars_5m` | the 5-minute series, whatever timeframe is displayed |
+| `ctx.predictions` | projection log — `.scored(bars_5m)`, `.accuracy(bars_5m)` |
 | `ctx.settings` | the app config |
 | `ctx.now` | wall-clock epoch seconds |
 
@@ -121,6 +123,9 @@ RenderSpec(pane=PANE_OWN, zero_line=True, series=(
 
 # dashed reference level that must not stretch the price scale
 SeriesSpec("level", "Prior Day High", line_style=2, autoscale=False)
+
+# draw a labelled horizontal line at the series' last value
+SeriesSpec("target", "Target", price_line=True)
 ```
 
 `line_style`: 0 solid, 1 dotted, 2 dashed.

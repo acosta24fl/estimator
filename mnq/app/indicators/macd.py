@@ -6,6 +6,7 @@ see on 15m is computed from exactly the 15m candles on screen.
 
 from __future__ import annotations
 
+from ..core.features import macd as macd_series
 from . import register
 from .base import (
     PANE_OWN,
@@ -15,7 +16,6 @@ from .base import (
     RenderSpec,
     SeriesSpec,
     Stat,
-    ema,
 )
 
 
@@ -65,22 +65,7 @@ class Macd(Indicator):
             ]
             return result
 
-        fast = ema(closes, fast_p)
-        slow = ema(closes, slow_p)
-
-        macd_line: list[float | None] = [
-            (f - s) if (f is not None and s is not None) else None
-            for f, s in zip(fast, slow)
-        ]
-
-        # The signal EMA runs over the MACD line's defined region only.
-        defined_idx = [i for i, v in enumerate(macd_line) if v is not None]
-        signal_line: list[float | None] = [None] * len(macd_line)
-        if len(defined_idx) >= signal_p:
-            dense = [macd_line[i] for i in defined_idx]  # type: ignore[misc]
-            sig = ema(dense, signal_p)
-            for pos, i in enumerate(defined_idx):
-                signal_line[i] = sig[pos]
+        macd_line, signal_line, _ = macd_series(closes, fast_p, slow_p, signal_p)
 
         last_macd = last_signal = last_hist = None
         prev_hist = None

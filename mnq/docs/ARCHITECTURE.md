@@ -10,6 +10,7 @@ without touching each other.
 ```
 mnq/
 ├── run.py                     entry point
+├── app/backtest.py            replay history to measure the forecast
 ├── app/
 │   ├── config.py              every setting, env-overridable
 │   ├── models.py              Bar / Quote — the shared vocabulary
@@ -27,7 +28,7 @@ mnq/
 │   │   └── plugins.py         shared auto-discovery helper
 │   ├── indicators/            what gets computed         [plugin registry]
 │   │   ├── base.py            Indicator interface + RenderSpec
-│   │   ├── vwap.py  bar_size.py  macd.py  swings.py
+│   │   ├── vwap.py  bar_size.py  macd.py  swings.py  forecast.py
 │   └── api/routes.py          HTTP + WebSocket
 ├── web/                       chart UI (vanilla JS, no build step)
 └── tests/
@@ -125,6 +126,27 @@ minified build is not kept in git; `app/vendor.py` downloads it on first run
 (npm registry first, CDN as fallback), verifies it actually is the library
 before saving, and does nothing on subsequent runs. `web/vendor/` is
 gitignored, and the tests skip rather than fail if it has not been fetched.
+
+### The forecast shares the indicators' maths
+
+``core/features.py`` holds EMA, MACD, session VWAP and the percentile helpers,
+and both the indicators and the forecast import from it. If the projection
+computed its own MACD, "what the chart shows" and "what the model used" could
+silently diverge and the projection would be impossible to audit.
+
+### Projections are locked, then graded
+
+A forecast nobody checks is decoration. Each projection is locked exactly once,
+when its 5-minute bar opens, from completed bars only — it cannot peek at the
+bar it is predicting, and it cannot be quietly revised as that bar develops.
+Only the prediction is persisted; scoring is derived from the bar series at
+read time, following the same rule as everything else here.
+
+Accuracy is always reported against a **no-move baseline** (assume price stays
+put). For 5-minute horizons that baseline is genuinely hard to beat, so a model
+measured without it can look useful while adding pure noise. Flat projections
+are excluded from the direction rate rather than scored by a different rule,
+which would otherwise inflate it.
 
 ### Failures are contained
 

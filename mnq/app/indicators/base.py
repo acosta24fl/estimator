@@ -19,8 +19,11 @@ from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 from ..config import Settings
+from ..core.features import ema  # re-exported: indicators import it from here
 from ..core.timeframes import SessionBucket, Timeframe
 from ..models import Bar
+
+__all__ = ["ema"]  # plus the names defined below
 
 # Rendering targets for a RenderSpec.
 PANE_PRICE = "price"  # overlay on the candlestick pane
@@ -44,6 +47,9 @@ class SeriesSpec:
     #: reference levels that can sit far from price (they would otherwise
     #: squash the candles to fit an off-screen level).
     autoscale: bool = True
+    #: Draw a horizontal line with a price label at this series' last value.
+    #: Useful for a target the viewer should be able to read off the axis.
+    price_line: bool = False
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -57,6 +63,7 @@ class SeriesSpec:
             "down_color": self.down_color,
             "visible_in_legend": self.visible_in_legend,
             "autoscale": self.autoscale,
+            "price_line": self.price_line,
         }
 
 
@@ -135,6 +142,10 @@ class IndicatorContext:
     session: SessionBucket
     settings: Settings
     now: float
+    #: 5-minute series and the running projection log, for indicators that
+    #: reason about the forecast. None when forecasting is unavailable.
+    bars_5m: Sequence[Bar] = ()
+    predictions: object | None = None
 
 
 @dataclass
@@ -186,26 +197,6 @@ class Indicator(ABC):
 # ---------------------------------------------------------------------------
 # Small numeric helpers shared by indicators.
 # ---------------------------------------------------------------------------
-
-
-def ema(values: Sequence[float], period: int) -> list[float | None]:
-    """Exponential moving average, seeded with an SMA of the first ``period``.
-
-    Returns a list aligned with ``values``; entries before the seed are None.
-    """
-    if period <= 0:
-        raise ValueError("period must be positive")
-    out: list[float | None] = [None] * len(values)
-    if len(values) < period:
-        return out
-    alpha = 2.0 / (period + 1.0)
-    seed = sum(values[:period]) / period
-    out[period - 1] = seed
-    prev = seed
-    for i in range(period, len(values)):
-        prev = (values[i] - prev) * alpha + prev
-        out[i] = prev
-    return out
 
 
 def points(value: float | None) -> float | None:

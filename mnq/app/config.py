@@ -38,6 +38,12 @@ class Settings:
     session_tz: str = "America/New_York"
     session_open_hour: int = 18
 
+    # --- forecast ---------------------------------------------------------
+    # Scales the projected 5-minute move. Below 1.0 damps it toward
+    # "no change"; 0.0 disables the drift entirely. Measure first with
+    # `python -m app.backtest`.
+    forecast_strength: float = 1.0
+
     # --- storage ----------------------------------------------------------
     data_dir: Path = PROJECT_DIR / "data"
     max_1m_bars: int = 20_000
@@ -64,6 +70,7 @@ def load_settings() -> Settings:
         request_timeout=float(_env("REQUEST_TIMEOUT", "15")),
         session_tz=_env("SESSION_TZ", "America/New_York"),
         session_open_hour=int(_env("SESSION_OPEN_HOUR", "18")),
+        forecast_strength=float(_env("FORECAST_STRENGTH", "1.0")),
         data_dir=Path(_env("DATA_DIR", str(PROJECT_DIR / "data"))),
         max_1m_bars=int(_env("MAX_1M_BARS", "20000")),
         host=_env("HOST", "127.0.0.1"),

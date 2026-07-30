@@ -44,6 +44,7 @@ MNQ_FEED=synthetic python run.py
 | **Bar size** — range per bar vs its rolling average | own pane, metrics panel |
 | **MACD** (12, 26, 9) for the selected timeframe | own pane, metrics panel |
 | **Daily higher highs / lower lows** — HH, LH, HL, LL | markers on 1d, level lines on every timeframe |
+| **5-minute projection** — where the next 5m bar may close, with an uncertainty cone and a measured track record | ray + cone at the right edge, metrics panel |
 | Feed health, bars logged, last bar written | footer |
 
 Every metric is computed for **the timeframe currently on screen**, so the
@@ -81,7 +82,53 @@ Every setting is an environment variable; no file edits required.
 | `MNQ_DAILY_RANGE` | `1y` | Daily history for market structure. |
 | `MNQ_SESSION_TZ` | `America/New_York` | Session timezone. |
 | `MNQ_SESSION_OPEN_HOUR` | `18` | Trade date rolls at 18:00 ET (CME Globex). |
+| `MNQ_FORECAST_STRENGTH` | `1.0` | Scales the projected move. `0.5` damps it, `0` disables drift. |
 | `MNQ_DATA_DIR` | `mnq/data` | Where bar logs are written. |
+
+## The 5-minute projection
+
+The dashboard projects where the forming 5-minute bar may close, drawn as a
+bright ray from the last price with a dashed cone for the likely range and the
+target price labelled on the axis. A dotted purple line lays every past
+projection over the candle it predicted, so the model's history sits next to
+what actually happened.
+
+The projection is a **transparent heuristic, not a trained model and not a
+trading signal.** It combines three features you already have:
+
+| Feature | Contribution |
+| --- | --- |
+| MACD histogram (5m) | momentum — continuation |
+| Distance from session VWAP | mean reversion — a pull back toward VWAP |
+| Daily HH/LL structure | directional bias |
+
+Each is normalised to [-1, +1], weighted (0.5 / 0.3 / 0.2), scaled by the
+average 5-minute bar range and capped at 1.5x that range. The metrics panel
+shows **each factor's contribution in points**, and they always sum to the
+total, so nothing is hidden.
+
+### It grades itself
+
+Every projection is locked once, when its bar opens, using only data available
+then — no hindsight — and appended to `data/predictions.jsonl`. Once the bar
+closes it is scored. The panel reports direction accuracy, how often price
+landed inside the cone, and average error **against a "assume no move"
+baseline**. If the model cannot beat that baseline it says *"Not adding
+value"* outright.
+
+Measure it against your own history without waiting:
+
+```bash
+python -m app.backtest --dry-run              # measure only
+python -m app.backtest --dry-run --strength 0.5
+python -m app.backtest                        # also populates the chart track
+```
+
+On the synthetic feed it scores ~52% direction (a coin flip) and does **not**
+beat the no-move baseline at full strength — which is the honest expected
+result for 5-minute returns, and exactly why the baseline comparison is
+built in. Run it on real MNQ history before trusting anything it draws, and
+damp `MNQ_FORECAST_STRENGTH` if the projection is overshooting.
 
 ## Adding to it later
 
@@ -100,10 +147,10 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-123 tests cover bucketing (including the DST-shifted session), aggregation,
+185 tests cover bucketing (including the DST-shifted session), aggregation,
 every indicator's maths, the append-only log, the Yahoo response parser
-(offline, using recorded payload shapes), the library fetch and the
-HTTP + WebSocket API. They need no network.
+(offline, using recorded payload shapes), the library fetch, the forecast and
+its scoring, and the HTTP + WebSocket API. They need no network.
 
 ## Notes and limits
 

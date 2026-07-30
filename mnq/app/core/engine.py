@@ -25,6 +25,8 @@ from ..indicators import IndicatorContext, all_indicators
 from ..models import Bar, Quote
 from . import timeframes
 from .aggregator import AggregationCache, aggregate
+from .forecast import compute_forecast
+from .prediction_log import PredictionLog
 from .store import BarStore
 
 log = logging.getLogger(__name__)
@@ -36,6 +38,7 @@ class Engine:
         self.feed = feed
         self.store = store
         self._cache = AggregationCache()
+        self.predictions = PredictionLog(settings.data_dir / "predictions.jsonl")
         self._task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
         self._listeners: set[Callable[[], Any]] = set()
@@ -53,6 +56,7 @@ class Engine:
     async def start(self) -> None:
         self.store.ensure_dirs()
         self.store.load()
+        self.predictions.load()
         await self._poll_once(include_daily=True)
         self._task = asyncio.create_task(self._loop(), name="mnq-poll")
 
@@ -113,6 +117,11 @@ class Engine:
                 self.next_delay(),
                 self.last_error,
             )
+
+        try:
+            self.record_prediction()
+        except Exception:  # a forecasting fault must not stop data collection
+            log.exception("failed to record prediction")
 
         due = (now - self.last_daily_ts) >= self.settings.daily_refresh_seconds
         if include_daily or due:
@@ -182,6 +191,42 @@ class Engine:
                     merged[bar.ts] = bar
         return [merged[k] for k in sorted(merged)]
 
+    def daily_structure_label(self) -> str:
+        """The daily HH/LL read, as the forecast's structure input."""
+        from ..indicators import get as get_indicator
+        from ..indicators.base import IndicatorContext
+
+        try:
+            indicator = get_indicator("daily_structure")
+        except KeyError:
+            return ""
+        ctx = IndicatorContext(
+            timeframe=timeframes.get("1d"),
+            bars=self.daily_series(),
+            minute_bars=(),
+            daily_bars=self.daily_series(),
+            session=timeframes.session_bucket(),
+            settings=self.settings,
+            now=time.time(),
+        )
+        stat = next(
+            (s for s in indicator.compute(ctx).stats if s.key == "structure"), None
+        )
+        return str(stat.value) if stat else ""
+
+    def current_forecast(self):
+        """Projection for the 5-minute bar currently forming."""
+        return compute_forecast(
+            self.bars_for(timeframes.get("5m")),
+            self.daily_structure_label(),
+            timeframes.session_bucket(),
+            strength=self.settings.forecast_strength,
+        )
+
+    def record_prediction(self):
+        """Lock the current projection, once per 5-minute bar."""
+        return self.predictions.observe(self.current_forecast())
+
     def bars_for(self, tf: timeframes.Timeframe) -> list[Bar]:
         if tf.key == "1d":
             return self.daily_series()
@@ -206,6 +251,8 @@ class Engine:
             session=timeframes.session_bucket(),
             settings=self.settings,
             now=now,
+            bars_5m=self.bars_for(timeframes.get("5m")),
+            predictions=self.predictions,
         )
 
         indicators: dict[str, Any] = {}

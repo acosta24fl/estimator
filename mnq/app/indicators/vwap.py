@@ -8,6 +8,7 @@ you see is exactly the line the numbers describe.
 
 from __future__ import annotations
 
+from ..core.features import session_vwap
 from . import register
 from .base import (
     PANE_PRICE,
@@ -61,37 +62,17 @@ class SessionVwap(Indicator):
             ]
             return result
 
-        session_start: int | None = None
-        cum_pv = 0.0
-        cum_vol = 0.0
-        cum_typ = 0.0
-        cum_n = 0
-        latest: float | None = None
-        session_bars = 0
-
-        for bar in ctx.bars:
-            start = ctx.session.start(bar.ts)
-            if start != session_start:
-                session_start = start
-                cum_pv = cum_vol = cum_typ = 0.0
-                cum_n = 0
-                session_bars = 0
-
-            cum_typ += bar.typical
-            cum_n += 1
-            cum_pv += bar.typical * bar.volume
-            cum_vol += bar.volume
-            session_bars += 1
-
-            # Fall back to an unweighted mean when the feed reports no volume,
-            # so the line stays continuous instead of dropping out.
-            vwap = (cum_pv / cum_vol) if cum_vol > 0 else (cum_typ / cum_n)
-            latest = vwap
-            result.series["vwap"].append({"time": bar.ts, "value": round(vwap, 2)})
+        values = session_vwap(ctx.bars, ctx.session)
+        for bar, value in zip(ctx.bars, values):
+            result.series["vwap"].append({"time": bar.ts, "value": round(value, 2)})
 
         last = ctx.bars[-1]
+        latest = values[-1] if values else None
         if latest is None:
             return result
+
+        session_start = ctx.session.start(last.ts)
+        session_bars = sum(1 for b in ctx.bars if ctx.session.start(b.ts) == session_start)
 
         distance = last.close - latest
         distance_pct = (distance / latest * 100.0) if latest else 0.0
