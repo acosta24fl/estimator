@@ -124,8 +124,14 @@ class TestStaticSite:
         assert resp.status_code == 200
         assert "MNQ Live Dashboard" in resp.text
 
-    def test_chart_library_is_vendored_locally(self, client):
-        resp = client.get("/static/vendor/lightweight-charts.standalone.production.js")
+    def test_chart_library_is_served_when_vendored(self, client):
+        # The library is fetched on first run rather than committed, so skip
+        # rather than fail on a checkout where it has not been downloaded yet.
+        from app.vendor import CHART_FILENAME, is_present
+
+        if not is_present(load_settings().web_dir):
+            pytest.skip("chart library not vendored yet; run `python -m app.vendor`")
+        resp = client.get(f"/static/vendor/{CHART_FILENAME}")
         assert resp.status_code == 200
         assert len(resp.content) > 100_000
 

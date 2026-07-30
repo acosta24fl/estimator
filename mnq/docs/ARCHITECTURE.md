@@ -14,6 +14,7 @@ mnq/
 │   ├── config.py              every setting, env-overridable
 │   ├── models.py              Bar / Quote — the shared vocabulary
 │   ├── main.py                assembly; the only file that wires parts together
+│   ├── vendor.py              first-run fetch of the charting library
 │   ├── feed/                  where data comes from      [plugin registry]
 │   │   ├── base.py            PriceFeed interface
 │   │   ├── yahoo.py           live Yahoo Finance
@@ -115,6 +116,15 @@ Adding an indicator on the Python side is enough to make it appear.
 underneath). `SeriesSpec.autoscale=False` keeps reference levels — like the
 daily swing lines, which can sit far from price — from stretching the price
 scale and squashing the candles.
+
+### The charting library is vendored, but not committed
+
+`web/` loads the chart library from `web/vendor/` rather than a CDN, so the
+page renders with no third-party host involved at load time. The 190 KB
+minified build is not kept in git; `app/vendor.py` downloads it on first run
+(npm registry first, CDN as fallback), verifies it actually is the library
+before saving, and does nothing on subsequent runs. `web/vendor/` is
+gitignored, and the tests skip rather than fail if it has not been fetched.
 
 ### Failures are contained
 

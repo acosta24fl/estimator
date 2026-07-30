@@ -7,11 +7,6 @@ It polls live prices, keeps an append-only log of every 1-minute bar, folds
 those minutes into 5m / 10m / 15m / 30m / 1h / 4h / 1d candles, and charts them
 with session VWAP, bar-size, MACD and daily higher-high / lower-low structure.
 
-![5-minute view](docs/dashboard-5m.png)
-
-*5-minute chart with session VWAP, bar size, MACD and the daily structure
-levels. Screenshots use the offline `synthetic` feed.*
-
 ## Quick start
 
 ```bash
@@ -21,6 +16,16 @@ python run.py
 ```
 
 Open <http://127.0.0.1:8765>.
+
+The first run downloads the charting library into `web/vendor/` (about 190 KB,
+once). After that the dashboard needs no third-party host to render. If your
+network blocks the download, fetch it yourself:
+
+```bash
+npm pack lightweight-charts@5.2.0     # then copy
+# package/dist/lightweight-charts.standalone.production.js
+# to mnq/web/vendor/
+```
 
 No network? Run the offline demo feed — same dashboard, synthetic prices:
 
@@ -42,11 +47,8 @@ MNQ_FEED=synthetic python run.py
 | Feed health, bars logged, last bar written | footer |
 
 Every metric is computed for **the timeframe currently on screen**, so the
-numbers always describe the candles you are looking at.
-
-On the daily timeframe the swing pivots are labelled directly on the chart:
-
-![daily view](docs/dashboard-1d.png)
+numbers always describe the candles you are looking at. On the daily timeframe
+the swing pivots are labelled directly on the chart as HH / LH / HL / LL.
 
 ## How the data flows
 
@@ -98,9 +100,10 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-116 tests cover bucketing (including the DST-shifted session), aggregation,
+123 tests cover bucketing (including the DST-shifted session), aggregation,
 every indicator's maths, the append-only log, the Yahoo response parser
-(offline, using recorded payload shapes) and the HTTP + WebSocket API.
+(offline, using recorded payload shapes), the library fetch and the
+HTTP + WebSocket API. They need no network.
 
 ## Notes and limits
 
@@ -112,3 +115,5 @@ every indicator's maths, the append-only log, the Yahoo response parser
   uses Yahoo's own daily history (1 year) so market structure works immediately.
 - Daily bars are keyed by **session open** (18:00 ET the previous calendar day),
   matching the CME trade date.
+- Charting uses [lightweight-charts](https://github.com/tradingview/lightweight-charts)
+  (Apache-2.0), fetched on first run rather than committed.

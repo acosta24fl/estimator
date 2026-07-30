@@ -2,5 +2,10 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-data/
 .pytest_cache/
+
+# Live bar logs — generated at runtime.
+data/
+
+# Charting library, fetched on first run by app/vendor.py.
+web/vendor/
