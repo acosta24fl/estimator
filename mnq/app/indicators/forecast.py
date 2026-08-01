@@ -17,7 +17,7 @@ baseline. If the model is not beating that baseline, it says so.
 
 from __future__ import annotations
 
-from ..core.forecast import compute_forecast
+from ..core.forecast import FACTOR_LABELS, compute_forecast
 from . import register
 from .base import (
     PANE_PRICE,
@@ -97,9 +97,13 @@ class FiveMinuteProjection(Indicator):
             result.stats = [Stat("projection_state", "Projection", "No 5m data")]
             return result
 
-        structure = _structure_from(ctx)
         forecast = compute_forecast(
-            bars_5m, structure, ctx.session, strength=ctx.settings.forecast_strength
+            bars_5m,
+            ctx.daily_bars,
+            ctx.session,
+            strength=ctx.settings.forecast_strength,
+            ridge_lambda=ctx.settings.forecast_ridge_lambda,
+            min_fit_samples=ctx.settings.forecast_min_samples,
         )
 
         if not forecast.valid:
@@ -183,7 +187,9 @@ class FiveMinuteProjection(Indicator):
                 hint=f"{forecast.agreement} of {len(forecast.factors)} factors agree.",
             ),
         ]
-        # Each factor's share of the projected move, in points.
+        # Each factor's share of the projected move, in points. With fitted
+        # coefficients these are literally coefficient x feature, so they sum
+        # to the projection exactly.
         for factor in forecast.factors:
             stats.append(
                 Stat(
@@ -194,6 +200,24 @@ class FiveMinuteProjection(Indicator):
                     tone={"up": "up", "down": "down"}.get(factor.direction, "neutral"),
                     signed=True,
                     hint=factor.detail,
+                )
+            )
+        if forecast.fit.ready:
+            stats.append(
+                Stat(
+                    "projection_fit",
+                    "Fitted On",
+                    f"{forecast.fit.samples} bars",
+                    tone="neutral",
+                    hint=(
+                        "Ridge-fitted coefficients (points per unit feature): "
+                        + ", ".join(
+                            f"{FACTOR_LABELS[k]} {v:+.1f}"
+                            for k, v in forecast.fit.coefficients.items()
+                        )
+                        + f". In-sample R² {forecast.fit.r2 * 100:.1f}% (optimistic; "
+                        "the skill score below is the out-of-sample number)."
+                    ),
                 )
             )
         return stats
@@ -214,32 +238,64 @@ class FiveMinuteProjection(Indicator):
 
         error = acc["mean_abs_error"]
         baseline = acc["baseline_abs_error"]
-        beats = error < baseline
+        skill = acc["skill_score"]
+        beats = skill is not None and skill > 0
+
+        # Skill leads: one signed number, positive only if the projection beats
+        # assuming price stays put. Everything else is supporting detail.
+        stats = [
+            Stat(
+                "projection_skill",
+                "Skill vs Baseline",
+                None if skill is None else round(skill * 100, 1),
+                unit="%",
+                precision=1,
+                tone="up" if beats else "down",
+                signed=True,
+                hint=(
+                    "1 − MSE(model) / MSE(no-move), measured out of sample. "
+                    "Positive means the projection helps; negative means it is "
+                    "actively worse than assuming no change."
+                ),
+            )
+        ]
 
         if acc["direction_rate"] is None:
-            direction_stat = Stat(
-                "projection_direction_rate",
-                "Direction Correct",
-                "n/a",
-                hint="No directional calls yet — every projection has been flat.",
+            stats.append(
+                Stat(
+                    "projection_direction_rate",
+                    "Direction Correct",
+                    "n/a",
+                    hint="No directional calls yet — every projection has been flat.",
+                )
             )
         else:
             direction = acc["direction_rate"] * 100
-            direction_stat = Stat(
-                "projection_direction_rate",
-                "Direction Correct",
-                round(direction, 1),
-                unit="%",
-                precision=1,
-                tone="up" if direction > 55 else ("down" if direction < 45 else "neutral"),
-                hint=(
-                    f"Over {acc['directional_count']} directional calls "
-                    f"(of {acc['count']} scored). 50% is a coin flip."
-                ),
+            low, high = acc["direction_ci"]
+            significant = acc["direction_significant"]
+            stats.append(
+                Stat(
+                    "projection_direction_rate",
+                    "Direction Correct",
+                    round(direction, 1),
+                    unit="%",
+                    precision=1,
+                    # Only colour it when the interval actually clears 50%.
+                    tone=("up" if direction > 50 else "down") if significant else "neutral",
+                    hint=(
+                        f"95% CI {low * 100:.1f}–{high * 100:.1f}% over "
+                        f"{acc['directional_count']} directional calls. "
+                        + (
+                            "Interval excludes 50%, so this is a real edge."
+                            if significant
+                            else "Interval includes 50% — not distinguishable "
+                            "from a coin flip yet."
+                        )
+                    ),
+                )
             )
 
-        return [
-            direction_stat,
+        stats += [
             Stat(
                 "projection_band_rate",
                 "Landed In Range",
@@ -247,6 +303,7 @@ class FiveMinuteProjection(Indicator):
                 unit="%",
                 precision=1,
                 tone="neutral",
+                hint="Band is built for 68% coverage, so this should sit near 68%.",
             ),
             Stat(
                 "projection_error",
@@ -254,10 +311,7 @@ class FiveMinuteProjection(Indicator):
                 round(error, 2),
                 unit="pts",
                 tone="up" if beats else "down",
-                hint=(
-                    f"Baseline (assume no move): {baseline:.2f} pts. "
-                    + ("Model is beating it." if beats else "Model is NOT beating it.")
-                ),
+                hint=f"Baseline (assume no move): {baseline:.2f} pts.",
             ),
             Stat(
                 "projection_verdict",
@@ -267,17 +321,6 @@ class FiveMinuteProjection(Indicator):
                 hint="If the model cannot beat assuming price stays put, ignore it.",
             ),
         ]
+        return stats
 
 
-def _structure_from(ctx: IndicatorContext) -> str:
-    """Read the daily HH/LL verdict from the structure indicator."""
-    from . import get as get_indicator
-
-    try:
-        indicator = get_indicator("daily_structure")
-    except KeyError:
-        return ""
-    stat = next(
-        (s for s in indicator.compute(ctx).stats if s.key == "structure"), None
-    )
-    return str(stat.value) if stat else ""

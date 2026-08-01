@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,6 +21,24 @@ from ..models import Bar
 from .forecast import Forecast
 
 log = logging.getLogger(__name__)
+
+
+def wilson_interval(hits: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval for a binomial proportion.
+
+    A hit rate without an interval is misleading at these sample sizes: over
+    100 predictions the 95% interval around a coin flip is roughly +/-10
+    percentage points, so "56% correct" is not evidence of anything. Wilson is
+    used rather than the normal approximation because it stays inside [0, 1]
+    and behaves near 0 and 1 and at small n.
+    """
+    if n <= 0:
+        return (0.0, 1.0)
+    p = hits / n
+    denom = 1.0 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return (max(0.0, centre - half), min(1.0, centre + half))
 
 
 @dataclass
@@ -207,26 +226,45 @@ class PredictionLog:
                 "count": 0,
                 "directional_count": 0,
                 "direction_rate": None,
+                "direction_ci": None,
+                "direction_significant": False,
                 "band_rate": None,
                 "mean_abs_error": None,
                 "baseline_abs_error": None,
+                "skill_score": None,
             }
         n = len(recent)
         directional = [s for s in recent if s.directional]
         # Baseline = "no change": how far price moved anyway. If the model's
         # error is not below this, the projection is adding nothing.
-        baseline = sum(abs(s.actual - s.prediction.anchor_price) for s in recent) / n
+        baseline_abs = sum(abs(s.actual - s.prediction.anchor_price) for s in recent) / n
+
+        # Skill score on squared error: 1 - MSE_model / MSE_baseline.
+        # Positive means the projection beats assuming price stays put;
+        # negative means it is actively worse. This is the honest headline.
+        mse_model = sum(s.error**2 for s in recent) / n
+        mse_base = sum((s.actual - s.prediction.anchor_price) ** 2 for s in recent) / n
+        skill = (1.0 - mse_model / mse_base) if mse_base > 0 else None
+
+        direction_rate = ci = None
+        significant = False
+        if directional:
+            hits = sum(s.direction_correct for s in directional)
+            direction_rate = hits / len(directional)
+            ci = wilson_interval(hits, len(directional))
+            # An edge is only claimable when the interval clears a coin flip.
+            significant = ci[0] > 0.5 or ci[1] < 0.5
+
         return {
             "count": n,
             "directional_count": len(directional),
-            "direction_rate": (
-                sum(s.direction_correct for s in directional) / len(directional)
-                if directional
-                else None
-            ),
+            "direction_rate": direction_rate,
+            "direction_ci": ci,
+            "direction_significant": significant,
             "band_rate": sum(s.within_band for s in recent) / n,
             "mean_abs_error": sum(abs(s.error) for s in recent) / n,
-            "baseline_abs_error": baseline,
+            "baseline_abs_error": baseline_abs,
+            "skill_score": skill,
         }
 
     @property

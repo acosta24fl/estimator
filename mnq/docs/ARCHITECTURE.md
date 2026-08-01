@@ -134,6 +134,30 @@ and both the indicators and the forecast import from it. If the projection
 computed its own MACD, "what the chart shows" and "what the model used" could
 silently diverge and the projection would be impossible to audit.
 
+### The projection is fitted, not asserted
+
+Coefficients come from a ridge regression of the realised next-bar move on the
+three features, refit from the stored series and using only pairs whose outcome
+is already known. Hand-set weights implicitly claim each feature correlates
+almost perfectly with the next move; the MSE-optimal coefficient is actually
+`rho * sigma_y / sigma_x`, and anything larger increases error. Measured
+walk-forward, hand-weighting scored -40% against the no-move baseline where
+fitting scored +8%, and the fitted sign of the VWAP term contradicted the
+assumed one.
+
+Fitting is also the safe failure mode: with no signal the coefficients shrink
+to zero and the projection becomes "no change" — the baseline — rather than
+confidently wrong.
+
+Each feature is scaled by its *own* trailing RMS rather than a shared
+volatility unit. Dividing session-scale VWAP distance by a 5-minute bar range
+drove `tanh` into saturation on ~47% of bars, collapsing that feature into a
+bare sign bit; self-scaling took it to 0%.
+
+`structure.py` exists because fitting the structure factor needs its *history*,
+not just its current value, and that history must be as-of: a fractal pivot at
+bar `j` is not knowable until `j + lookback` bars have printed.
+
 ### Projections are locked, then graded
 
 A forecast nobody checks is decoration. Each projection is locked exactly once,
@@ -143,10 +167,15 @@ Only the prediction is persisted; scoring is derived from the bar series at
 read time, following the same rule as everything else here.
 
 Accuracy is always reported against a **no-move baseline** (assume price stays
-put). For 5-minute horizons that baseline is genuinely hard to beat, so a model
-measured without it can look useful while adding pure noise. Flat projections
-are excluded from the direction rate rather than scored by a different rule,
-which would otherwise inflate it.
+put), as a skill score `1 - MSE/MSE_base` — one signed number, negative when the
+projection is actively harmful. For 5-minute horizons that baseline is hard to
+beat, so a model measured without it can look useful while adding pure noise.
+
+Rates carry 95% Wilson intervals and are only presented as an edge when the
+interval excludes 50%; at 100 samples that interval is about +/-10 points, so
+raw percentages on small samples are noise. Flat projections are excluded from
+the direction rate rather than scored by a different rule, which would inflate
+it.
 
 ### Failures are contained
 

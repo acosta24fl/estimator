@@ -43,6 +43,11 @@ class Settings:
     # "no change"; 0.0 disables the drift entirely. Measure first with
     # `python -m app.backtest`.
     forecast_strength: float = 1.0
+    # Ridge penalty on the fitted coefficients. Larger = stronger shrinkage
+    # toward "no move", which is the safe direction when signal is weak.
+    forecast_ridge_lambda: float = 10.0
+    # Fitted (features, outcome) pairs required before projecting at all.
+    forecast_min_samples: int = 200
 
     # --- storage ----------------------------------------------------------
     data_dir: Path = PROJECT_DIR / "data"
@@ -71,6 +76,8 @@ def load_settings() -> Settings:
         session_tz=_env("SESSION_TZ", "America/New_York"),
         session_open_hour=int(_env("SESSION_OPEN_HOUR", "18")),
         forecast_strength=float(_env("FORECAST_STRENGTH", "1.0")),
+        forecast_ridge_lambda=float(_env("FORECAST_RIDGE_LAMBDA", "10")),
+        forecast_min_samples=int(_env("FORECAST_MIN_SAMPLES", "200")),
         data_dir=Path(_env("DATA_DIR", str(PROJECT_DIR / "data"))),
         max_1m_bars=int(_env("MAX_1M_BARS", "20000")),
         host=_env("HOST", "127.0.0.1"),

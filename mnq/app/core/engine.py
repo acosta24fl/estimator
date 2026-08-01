@@ -191,36 +191,15 @@ class Engine:
                     merged[bar.ts] = bar
         return [merged[k] for k in sorted(merged)]
 
-    def daily_structure_label(self) -> str:
-        """The daily HH/LL read, as the forecast's structure input."""
-        from ..indicators import get as get_indicator
-        from ..indicators.base import IndicatorContext
-
-        try:
-            indicator = get_indicator("daily_structure")
-        except KeyError:
-            return ""
-        ctx = IndicatorContext(
-            timeframe=timeframes.get("1d"),
-            bars=self.daily_series(),
-            minute_bars=(),
-            daily_bars=self.daily_series(),
-            session=timeframes.session_bucket(),
-            settings=self.settings,
-            now=time.time(),
-        )
-        stat = next(
-            (s for s in indicator.compute(ctx).stats if s.key == "structure"), None
-        )
-        return str(stat.value) if stat else ""
-
     def current_forecast(self):
         """Projection for the 5-minute bar currently forming."""
         return compute_forecast(
             self.bars_for(timeframes.get("5m")),
-            self.daily_structure_label(),
+            self.daily_series(),
             timeframes.session_bucket(),
             strength=self.settings.forecast_strength,
+            ridge_lambda=self.settings.forecast_ridge_lambda,
+            min_fit_samples=self.settings.forecast_min_samples,
         )
 
     def record_prediction(self):

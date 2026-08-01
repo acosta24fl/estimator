@@ -83,6 +83,8 @@ Every setting is an environment variable; no file edits required.
 | `MNQ_SESSION_TZ` | `America/New_York` | Session timezone. |
 | `MNQ_SESSION_OPEN_HOUR` | `18` | Trade date rolls at 18:00 ET (CME Globex). |
 | `MNQ_FORECAST_STRENGTH` | `1.0` | Scales the projected move. `0.5` damps it, `0` disables drift. |
+| `MNQ_FORECAST_RIDGE_LAMBDA` | `10` | Ridge penalty. Larger shrinks coefficients toward no-move. |
+| `MNQ_FORECAST_MIN_SAMPLES` | `200` | Fitted samples required before projecting at all. |
 | `MNQ_DATA_DIR` | `mnq/data` | Where bar logs are written. |
 
 ## The 5-minute projection
@@ -93,28 +95,56 @@ target price labelled on the axis. A dotted purple line lays every past
 projection over the candle it predicted, so the model's history sits next to
 what actually happened.
 
-The projection is a **transparent heuristic, not a trained model and not a
-trading signal.** It combines three features you already have:
+The projection is a **small fitted linear model, not a trading signal.** It
+uses three features you already have:
 
-| Feature | Contribution |
+| Feature | What it measures |
 | --- | --- |
-| MACD histogram (5m) | momentum — continuation |
-| Distance from session VWAP | mean reversion — a pull back toward VWAP |
+| MACD histogram (5m) | momentum |
+| Distance from session VWAP | stretch from the session's fair value |
 | Daily HH/LL structure | directional bias |
 
-Each is normalised to [-1, +1], weighted (0.5 / 0.3 / 0.2), scaled by the
-average 5-minute bar range and capped at 1.5x that range. The metrics panel
-shows **each factor's contribution in points**, and they always sum to the
-total, so nothing is hidden.
+Each is scaled against its *own* recent magnitude (so it stays comparable
+across volatility regimes), then regressed on the realised next-bar move by
+ridge:
+
+    beta = (XtX + lambda*I)^-1 Xt y
+
+The projection is `sum(beta_k * x_k)`. Coefficients are in **points per unit
+feature**, so each term *is* that feature's contribution in points and they sum
+exactly to the projection — the panel shows the breakdown.
+
+**Why fitted rather than hand-weighted.** For a predictor with correlation
+`rho` to the target, the MSE-optimal coefficient is `rho * sigma_y / sigma_x`;
+anything larger provably increases error. An earlier version asserted weights
+(0.5 / 0.3 / 0.2) and scaled by volatility, which implicitly assumes
+`rho ~ 1`. Measured walk-forward on stored history:
+
+| | direction | mean abs error | skill vs baseline |
+| --- | --- | --- | --- |
+| hand-weighted | 51.8% | 16.00 pts | **-40.5%** |
+| ridge-fitted | 61.6% | 13.07 pts | **+8.1%** |
+
+Fitting also fails safely: with no signal the coefficients shrink toward zero
+and the projection degenerates to "no change", which is the baseline. Guessed
+weights have no such guarantee. There is no intercept — over five minutes the
+unconditional expected move is ~0, and a fitted constant would bias every
+projection.
 
 ### It grades itself
 
 Every projection is locked once, when its bar opens, using only data available
 then — no hindsight — and appended to `data/predictions.jsonl`. Once the bar
-closes it is scored. The panel reports direction accuracy, how often price
-landed inside the cone, and average error **against a "assume no move"
-baseline**. If the model cannot beat that baseline it says *"Not adding
-value"* outright.
+closes it is scored. The headline is the **skill score**,
+`1 - MSE(model) / MSE(no-move)`: positive means the projection helps, negative
+means it is actively worse than assuming price stays put. If it cannot beat the
+baseline the panel says *"Not adding value"* outright.
+
+Rates carry **95% Wilson confidence intervals**, and the direction rate is only
+coloured as an edge when its interval clears 50%. This matters more than it
+sounds: over 100 predictions the interval around a coin flip is roughly +/-10
+percentage points, so "56% correct" on a small sample is not evidence of
+anything, and the panel now says so.
 
 Measure it against your own history without waiting:
 
@@ -124,11 +154,13 @@ python -m app.backtest --dry-run --strength 0.5
 python -m app.backtest                        # also populates the chart track
 ```
 
-On the synthetic feed it scores ~52% direction (a coin flip) and does **not**
-beat the no-move baseline at full strength — which is the honest expected
-result for 5-minute returns, and exactly why the baseline comparison is
-built in. Run it on real MNQ history before trusting anything it draws, and
-damp `MNQ_FORECAST_STRENGTH` if the projection is overshooting.
+On the synthetic feed the fitted model scores ~61% direction and about +9%
+skill. **That number will not transfer** — synthetic prices have lag-1 return
+autocorrelation of +0.28 where real 5-minute futures are near 0. Run the
+backtest on your own MNQ history before trusting anything it draws.
+
+If the projection overshoots, raise `MNQ_FORECAST_RIDGE_LAMBDA` (stronger
+shrinkage toward no-move) or lower `MNQ_FORECAST_STRENGTH`.
 
 ## Adding to it later
 
@@ -147,10 +179,11 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-185 tests cover bucketing (including the DST-shifted session), aggregation,
+216 tests cover bucketing (including the DST-shifted session), aggregation,
 every indicator's maths, the append-only log, the Yahoo response parser
 (offline, using recorded payload shapes), the library fetch, the forecast and
-its scoring, and the HTTP + WebSocket API. They need no network.
+the ridge solver, the as-of structure series, prediction scoring and the
+HTTP + WebSocket API. They need no network.
 
 ## Notes and limits
 

@@ -30,7 +30,7 @@ log = logging.getLogger(__name__)
 
 
 def replay(
-    bars_5m, structure: str, session, logbook: PredictionLog, strength: float = 1.0
+    bars_5m, daily_bars, session, logbook: PredictionLog, strength: float = 1.0
 ) -> int:
     """Walk the series, projecting each bar from its predecessors only."""
     recorded = 0
@@ -38,7 +38,7 @@ def replay(
 
     for cutoff in range(MIN_BARS, len(completed)):
         forecast = compute_forecast(
-            completed[:cutoff], structure, session, strength=strength
+            completed[:cutoff], daily_bars, session, strength=strength
         )
         if not forecast.valid:
             continue
@@ -84,8 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         logbook.load()
 
     strength = args.strength if args.strength is not None else settings.forecast_strength
-    # Structure is a slow-moving daily read, so one value covers the replay.
-    recorded = replay(bars_5m, "Range", session, logbook, strength)
+    recorded = replay(bars_5m, store.daily_series(), session, logbook, strength)
     acc = logbook.accuracy(bars_5m, args.window)
     print(f"\n5-minute history replayed: {len(bars_5m)} bars (strength {strength})")
     print(f"predictions recorded:      {recorded}")
@@ -102,6 +101,8 @@ def main(argv: list[str] | None = None) -> int:
             f"  over {acc['directional_count']} directional calls (50% = coin flip)"
         )
     print(f"landed in range:           {acc['band_rate'] * 100:.1f}%")
+    if acc["skill_score"] is not None:
+        print(f"skill score (1-MSE/MSEb):  {acc['skill_score'] * 100:+.1f}%")
     print(f"mean abs error:            {acc['mean_abs_error']:.2f} pts")
     print(f"no-move baseline error:    {acc['baseline_abs_error']:.2f} pts")
     verdict = (

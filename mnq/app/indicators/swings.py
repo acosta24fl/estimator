@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Sequence
 
+from ..core.structure import classify, find_pivots, label_swings  # noqa: F401
 from ..models import Bar
 from . import register
 from .base import (
@@ -32,20 +33,6 @@ from .base import (
 
 _UP = "#2e9e6b"
 _DOWN = "#d1495b"
-
-
-def find_pivots(bars: Sequence[Bar], lookback: int) -> tuple[list[int], list[int]]:
-    """Return (indices of pivot highs, indices of pivot lows)."""
-    highs: list[int] = []
-    lows: list[int] = []
-    n = len(bars)
-    for i in range(lookback, n - lookback):
-        window = range(i - lookback, i + lookback + 1)
-        if all(bars[i].high > bars[j].high for j in window if j != i):
-            highs.append(i)
-        if all(bars[i].low < bars[j].low for j in window if j != i):
-            lows.append(i)
-    return highs, lows
 
 
 @register
@@ -95,24 +82,7 @@ class DailyStructure(Indicator):
             ]
             return result
 
-        high_idx, low_idx = find_pivots(daily, lookback)
-
-        # Label each swing against the previous swing of the same kind.
-        labelled_highs: list[tuple[int, float, str]] = []  # (index, price, label)
-        prev = None
-        for i in high_idx:
-            price = daily[i].high
-            label = "HH" if prev is not None and price > prev else ("LH" if prev is not None else "H")
-            labelled_highs.append((i, price, label))
-            prev = price
-
-        labelled_lows: list[tuple[int, float, str]] = []
-        prev = None
-        for i in low_idx:
-            price = daily[i].low
-            label = "HL" if prev is not None and price > prev else ("LL" if prev is not None else "L")
-            labelled_lows.append((i, price, label))
-            prev = price
+        labelled_highs, labelled_lows = label_swings(daily, lookback)
 
         # Step-lines use the confirmation timestamp, not the pivot's own time.
         def confirmed(swings: list[tuple[int, float, str]]) -> list[tuple[int, float]]:
@@ -180,18 +150,10 @@ class DailyStructure(Indicator):
         last_high = highs[-1] if highs else None
         last_low = lows[-1] if lows else None
 
-        structure, tone = "Range", "neutral"
-        if last_high and last_low:
-            hl = last_high[2]
-            ll = last_low[2]
-            if hl == "HH" and ll == "HL":
-                structure, tone = "Uptrend", "up"
-            elif hl == "LH" and ll == "LL":
-                structure, tone = "Downtrend", "down"
-            elif hl == "HH" or ll == "HL":
-                structure, tone = "Range (bullish tilt)", "up"
-            elif hl == "LH" or ll == "LL":
-                structure, tone = "Range (bearish tilt)", "down"
+        structure = classify(last_high[2] if last_high else None,
+                             last_low[2] if last_low else None)
+        tone = {"Uptrend": "up", "Range (bullish tilt)": "up",
+                "Downtrend": "down", "Range (bearish tilt)": "down"}.get(structure, "neutral")
 
         # How many consecutive higher highs / lower lows are on the tape.
         streak_hh = _streak([h[2] for h in highs], "HH")

@@ -182,3 +182,78 @@ class TestDirectionMetricIntegrity:
             actual_bars.append(bar_at(ts, 20_000.0 + i * 3))
         acc = logbook.accuracy(actual_bars)
         assert acc["mean_abs_error"] == acc["baseline_abs_error"]
+
+
+class TestSkillAndConfidence:
+    """Item 3: the panel must report significance, not bare percentages."""
+
+    def test_wilson_interval_brackets_the_estimate(self):
+        from app.core.prediction_log import wilson_interval
+
+        low, high = wilson_interval(60, 100)
+        assert low < 0.60 < high
+
+    def test_wilson_interval_narrows_with_more_data(self):
+        from app.core.prediction_log import wilson_interval
+
+        wide = wilson_interval(55, 100)
+        tight = wilson_interval(550, 1000)
+        assert (tight[1] - tight[0]) < (wide[1] - wide[0])
+
+    def test_wilson_interval_stays_inside_zero_one(self):
+        from app.core.prediction_log import wilson_interval
+
+        for hits, n in ((0, 10), (10, 10), (1, 3)):
+            low, high = wilson_interval(hits, n)
+            assert 0.0 <= low <= high <= 1.0
+
+    def test_a_coin_flip_is_not_reported_as_significant(self, tmp_path):
+        logbook = PredictionLog(tmp_path / "p.jsonl")
+        actual_bars = []
+        for i in range(40):  # alternating hit/miss => ~50%
+            ts = BASE_TS + i * STEP
+            logbook.observe(forecast_at(ts, anchor_price=20_000.0, target=20_010.0))
+            actual_bars.append(bar_at(ts, 20_005.0 if i % 2 else 19_995.0))
+        acc = logbook.accuracy(actual_bars)
+        assert acc["direction_significant"] is False
+
+    def test_a_strong_edge_is_reported_as_significant(self, tmp_path):
+        logbook = PredictionLog(tmp_path / "p.jsonl")
+        actual_bars = []
+        for i in range(200):  # always correct
+            ts = BASE_TS + i * STEP
+            logbook.observe(forecast_at(ts, anchor_price=20_000.0, target=20_010.0))
+            actual_bars.append(bar_at(ts, 20_008.0))
+        acc = logbook.accuracy(actual_bars)
+        assert acc["direction_significant"] is True
+        assert acc["direction_ci"][0] > 0.5
+
+    def test_skill_score_is_positive_when_the_model_beats_no_move(self, tmp_path):
+        logbook = PredictionLog(tmp_path / "p.jsonl")
+        actual_bars = []
+        for i in range(20):
+            ts = BASE_TS + i * STEP
+            logbook.observe(forecast_at(ts, anchor_price=20_000.0, target=20_010.0))
+            actual_bars.append(bar_at(ts, 20_010.0))  # perfect
+        assert logbook.accuracy(actual_bars)["skill_score"] == 1.0
+
+    def test_skill_score_is_negative_when_the_model_is_worse(self, tmp_path):
+        logbook = PredictionLog(tmp_path / "p.jsonl")
+        actual_bars = []
+        for i in range(20):
+            ts = BASE_TS + i * STEP
+            logbook.observe(forecast_at(ts, anchor_price=20_000.0, target=20_050.0))
+            actual_bars.append(bar_at(ts, 19_999.0))  # barely moved; model said +50
+        assert logbook.accuracy(actual_bars)["skill_score"] < 0
+
+    def test_a_no_move_projection_scores_exactly_zero_skill(self, tmp_path):
+        """Predicting no change must be indistinguishable from the baseline."""
+        logbook = PredictionLog(tmp_path / "p.jsonl")
+        actual_bars = []
+        for i in range(10):
+            ts = BASE_TS + i * STEP
+            flat = forecast_at(ts, anchor_price=20_000.0, target=20_000.0)
+            flat.direction = "flat"
+            logbook.observe(flat)
+            actual_bars.append(bar_at(ts, 20_000.0 + i))
+        assert abs(logbook.accuracy(actual_bars)["skill_score"]) < 1e-12
