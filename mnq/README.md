@@ -207,6 +207,44 @@ Also note the arithmetic: for a symmetric bet, profit factor `PF` needs a win
 rate of `PF / (1 + PF)`, so **PF 2.0 requires roughly 66.7% before costs.**
 Run the test on your own MNQ history and believe that number, not these.
 
+## Profiling the data
+
+```bash
+python -m app.analyze              # all six measurements
+python -m app.analyze --tf 15m     # focus a timeframe for hourly/wick detail
+```
+
+Answers "is there anything in this series worth modelling" before you build a
+model on it:
+
+| # | Measurement | What it tells you |
+| --- | --- | --- |
+| 1 | **Volatility** | range per bar per timeframe, plus whether volatility clusters |
+| 2 | **Acceleration** | does an expanding bar predict another expanding bar |
+| 3 | **Continuation** | does direction persist — overall, after big moves, after small |
+| 4 | **Bar length vs timeframe** | fitted exponent `b` in `mean |move| ~ T^b` |
+| 5 | **Wick / body** | average bar shape, and whether wick asymmetry predicts anything |
+| 6 | **Hour of day** | all of the above split by session hour |
+
+The exponent in (4) is the most informative single number: **0.5 is a random
+walk**, above 0.55 means moves compound (trending), below 0.45 means they
+partly cancel (mean-reverting).
+
+Every rate carries a 95% Wilson interval and a sample count, and the report
+ends by comparing how many results it flagged against how many chance alone
+predicts. A 95% interval is wrong 1 time in 20 by construction, so a report
+running ~40 tests produces about two REALs on pure noise every single time —
+which is why the summary exists rather than leaving you to count.
+
+Two correctness details worth knowing, both found by running the tool against
+a random walk with known properties:
+
+* Measurements work over **contiguous runs only**. Diffing across a weekend or
+  the daily break is not a bar-sized move; counting it as one inflated hourly
+  drift by about 19x before this was fixed.
+* The two wick tests are reported **separately**. OR-ing them into one verdict
+  doubles the false-positive rate.
+
 ## Adding to it later
 
 This is built to grow by **adding files, never replacing them**. A new
@@ -224,11 +262,12 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-256 tests cover bucketing (including the DST-shifted session), aggregation,
+282 tests cover bucketing (including the DST-shifted session), aggregation,
 every indicator's maths, the append-only log, the Yahoo response parser
 (offline, using recorded payload shapes), the library fetch, the forecast and
 the ridge solver, the as-of structure series, the volatility model,
-trade simulation and the HTTP + WebSocket API. They need no network.
+trade simulation, the profiling measurements (validated against series with
+known properties) and the HTTP + WebSocket API. They need no network.
 
 ## Notes and limits
 
