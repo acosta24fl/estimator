@@ -53,6 +53,8 @@ from .features import (
     average_range,
     clamp,
     close_to_close_moves,
+    ewma_volatility,
+    volatility_persistence,
     macd,
     percentile,
     session_vwap,
@@ -72,7 +74,9 @@ MAX_MOVE_SIGMA = 1.5
 _VOL_PERIOD = 20
 _SCALE_LOOKBACK = 200  # window for each feature's own magnitude
 _BAND_QUANTILE = 0.68
-_BAND_LOOKBACK = 60
+_BAND_LOOKBACK = 300
+#: RiskMetrics decay for the conditional-volatility recursion.
+EWMA_LAMBDA = 0.94
 _STRUCTURE_LOOKBACK = 2
 
 FACTOR_LABELS = {
@@ -354,7 +358,7 @@ def compute_forecast(
         for i, key in enumerate(FACTOR_KEYS)
     ]
 
-    band_half = _band_half_width(completed)
+    band_half = band_half_width(completed)
     target = anchor_price + expected_move
     direction = "up" if expected_move > 0 else ("down" if expected_move < 0 else "flat")
     agreement = sum(1 for f in factors if f.direction == direction and f.points)
@@ -383,8 +387,73 @@ def _detail(key: str, score: float, coefficient: float, structure_label: str) ->
     return f"score {score:+.2f} x fitted {coefficient:+.1f} pts/unit"
 
 
+def band_half_width(bars: Sequence[Bar], lam: float = EWMA_LAMBDA) -> float:
+    """Half-width of the likely-range cone, in points.
+
+    Scale comes from an EWMA of Garman-Klass variance, so the cone tightens in
+    quiet regimes and widens in active ones — volatility clustering is the one
+    thing at this horizon that genuinely *is* predictable.
+
+    Shape comes from the data rather than a normal assumption: the multiplier
+    is the 68th percentile of past |move| / sigma, so fat tails widen the band
+    instead of silently breaking its coverage. Both parts use only bars that
+    had already closed.
+    """
+    series = list(bars)
+    if len(series) < 3:
+        return 0.0
+
+    raw = ewma_volatility(series, lam)
+    moves = close_to_close_moves(series)  # moves[i] is bar i -> i+1
+
+    # Blend the conditional estimate toward a flat one by how much it actually
+    # tracks realised magnitude. Reacting to recent volatility only helps if
+    # volatility clusters; where it does not, an adaptive band tracks noise and
+    # its coverage degrades in exactly the regimes it was meant to fix.
+    #
+    # The weight is the regression slope of |move| on sigma, rescaled to
+    # relative units — the same shrinkage rule the drift term uses. A slope of
+    # zero (sigma says nothing) collapses the band to flat; a slope matching
+    # the estimate one-for-one uses it fully.
+    flat = sum(raw[-_BAND_LOOKBACK:]) / len(raw[-_BAND_LOOKBACK:])
+    weight = _conditional_weight(raw, moves)
+    sigma = [weight * s + (1.0 - weight) * flat for s in raw]
+
+    # Standardise each realised move by the volatility known just before it.
+    standardised = [abs(moves[i]) / sigma[i] for i in range(len(moves)) if sigma[i] > 0]
+    if not standardised:
+        return percentile([abs(m) for m in moves], _BAND_QUANTILE)
+
+    multiplier = percentile(standardised[-_BAND_LOOKBACK:], _BAND_QUANTILE)
+    return multiplier * sigma[-1]
+
+
+def _conditional_weight(sigma: Sequence[float], moves: Sequence[float]) -> float:
+    """How far to trust the conditional volatility estimate, in [0, 1].
+
+    Slope of |move| regressed on sigma, expressed relative to their means, so
+    the result is a pure "does this estimate move with reality" number.
+    """
+    pairs = [
+        (sigma[i], abs(moves[i]))
+        for i in range(min(len(moves), len(sigma)))
+        if sigma[i] > 0
+    ][-_BAND_LOOKBACK:]
+    if len(pairs) < 30:
+        return 0.0
+    xs = [p[0] for p in pairs]
+    ys = [p[1] for p in pairs]
+    mx = sum(xs) / len(xs)
+    my = sum(ys) / len(ys)
+    var = sum((x - mx) ** 2 for x in xs)
+    if var <= 0 or mx <= 0 or my <= 0:
+        return 0.0
+    slope = sum((x - mx) * (y - my) for x, y in pairs) / var
+    return clamp(slope * mx / my, 0.0, 1.0)
+
+
+# Kept for callers that want the old fixed-window behaviour.
 def _band_half_width(bars: Sequence[Bar]) -> float:
-    """Typical absolute 5-minute move, from recent history."""
     moves = close_to_close_moves(list(bars)[-_BAND_LOOKBACK:])
     if not moves:
         return 0.0

@@ -162,6 +162,51 @@ backtest on your own MNQ history before trusting anything it draws.
 If the projection overshoots, raise `MNQ_FORECAST_RIDGE_LAMBDA` (stronger
 shrinkage toward no-move) or lower `MNQ_FORECAST_STRENGTH`.
 
+### Adaptive uncertainty band
+
+The cone's scale comes from an EWMA of Garman-Klass variance (which uses the
+full OHLC and is ~7x more efficient than close-to-close), and its shape from
+the empirical 68th percentile of past |move| / sigma, so fat tails widen it
+rather than silently breaking coverage.
+
+Crucially the conditional estimate is **blended toward a flat one by how much
+this series' volatility actually tracks realised magnitude** — the same
+shrinkage rule the drift uses. Reacting to recent volatility only helps if
+volatility clusters. Measured on a regime-switching series (persistence 0.22,
+like real futures) the adaptive band cut the worst per-regime coverage error
+from 32.3pp to 20.6pp; on a series with no clustering it costs 0.6pp instead of
+the 2.6pp an unblended EWMA cost.
+
+## Is it tradeable?
+
+```bash
+python -m app.tradetest                  # default costs
+python -m app.tradetest --cost-points 0  # frictionless, for comparison
+```
+
+This commits to the simplest rule the projection implies — enter at the bar
+open in the projected direction, exit at its close, five-minute hold, no stop
+or target — charges $1.50 per round turn (0.75 pts: ~$1.00 commission plus one
+tick), sweeps entry thresholds on the **first half** of history and reports the
+chosen one on the **unseen second half**, with a bootstrap confidence interval.
+
+Two results worth internalising before you read any profit factor:
+
+| dataset | gross PF | net PF | win rate |
+| --- | --- | --- | --- |
+| synthetic feed (lag-1 autocorr +0.28) | 2.33 | 2.07 | 60.2% |
+| **driftless random walk (no edge exists)** | **1.01** | **0.76** | 47.4% |
+
+The random walk is the control. The model correctly finds nothing there — gross
+PF 1.01 — and **costs alone take it to 0.76**. That is the tax every 5-minute
+strategy pays, and it is why the synthetic feed's PF 2.07 says nothing about
+MNQ: it is measuring the generator's artificial autocorrelation, which real
+5-minute futures returns do not have.
+
+Also note the arithmetic: for a symmetric bet, profit factor `PF` needs a win
+rate of `PF / (1 + PF)`, so **PF 2.0 requires roughly 66.7% before costs.**
+Run the test on your own MNQ history and believe that number, not these.
+
 ## Adding to it later
 
 This is built to grow by **adding files, never replacing them**. A new
@@ -179,11 +224,11 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-216 tests cover bucketing (including the DST-shifted session), aggregation,
+256 tests cover bucketing (including the DST-shifted session), aggregation,
 every indicator's maths, the append-only log, the Yahoo response parser
 (offline, using recorded payload shapes), the library fetch, the forecast and
-the ridge solver, the as-of structure series, prediction scoring and the
-HTTP + WebSocket API. They need no network.
+the ridge solver, the as-of structure series, the volatility model,
+trade simulation and the HTTP + WebSocket API. They need no network.
 
 ## Notes and limits
 
