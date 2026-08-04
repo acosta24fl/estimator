@@ -26,6 +26,7 @@ from ..models import Bar, Quote
 from . import timeframes
 from .aggregator import AggregationCache, aggregate
 from .forecast import compute_forecast
+from .outlook import build_outlook
 from .prediction_log import PredictionLog
 from .store import BarStore
 
@@ -202,6 +203,39 @@ class Engine:
             min_fit_samples=self.settings.forecast_min_samples,
         )
 
+    def signal_timeframe(self):
+        """The registered timeframe matching the headline call's horizon."""
+        wanted = self.settings.signal_horizon_minutes * 60
+        for tf in timeframes.ordered():
+            if tf.nominal_seconds == wanted:
+                return tf
+        return timeframes.get("5m")
+
+    def current_outlook(self):
+        """Bullish / bearish / no-call for the configured horizon.
+
+        Fitted on the timeframe that matches the horizon, so a 10-minute call
+        is a projection of the next 10-minute bar rather than a 5-minute one
+        stretched to fit.
+        """
+        tf = self.signal_timeframe()
+        forecast = compute_forecast(
+            self.bars_for(tf),
+            self.daily_series(),
+            timeframes.session_bucket(),
+            horizon_seconds=tf.nominal_seconds,
+            strength=self.settings.forecast_strength,
+            ridge_lambda=self.settings.forecast_ridge_lambda,
+            min_fit_samples=self.settings.forecast_min_samples,
+        )
+        accuracy = self.predictions.accuracy(self.bars_for(timeframes.get("5m")))
+        return build_outlook(
+            forecast,
+            horizon_minutes=tf.nominal_seconds // 60,
+            skill=accuracy.get("skill_score"),
+            min_ratio=self.settings.signal_min_ratio,
+        )
+
     def record_prediction(self):
         """Lock the current projection, once per 5-minute bar."""
         return self.predictions.observe(self.current_forecast())
@@ -273,9 +307,19 @@ class Engine:
             "change": None if change is None else round(change, 2),
             "change_pct": None if change_pct is None else round(change_pct, 3),
             "bars": [b.as_chart_dict() for b in visible],
+            "outlook": self._outlook_payload(),
             "indicators": indicators,
             "status": self.status(),
         }
+
+    def _outlook_payload(self) -> dict[str, Any]:
+        try:
+            return self.current_outlook().as_dict()
+        except Exception:  # a bad call must not break the chart
+            log.exception("failed to build outlook")
+            from .outlook import Outlook
+
+            return Outlook(reason="unavailable").as_dict()
 
     def _previous_session_close(self) -> float | None:
         daily = self.daily_series()

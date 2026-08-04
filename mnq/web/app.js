@@ -257,6 +257,7 @@ function applySnapshot(snap) {
   }
 
   renderQuote(snap);
+  renderOutlook(snap.outlook);
   renderMetrics(snap);
   renderStatus(snap.status);
 }
@@ -285,6 +286,47 @@ function renderQuote(snap) {
   const pct = snap.change_pct == null ? "" : ` (${sign}${snap.change_pct.toFixed(2)}%)`;
   change.textContent = `${sign}${formatNumber(snap.change, 2)}${pct}`;
   change.className = "change " + (snap.change > 0 ? "up" : snap.change < 0 ? "down" : "");
+}
+
+/**
+ * Paint the page with the current directional call.
+ *
+ * The server decides bullish / bearish / neutral — including refusing to call
+ * a move too small to matter, and capping confidence when measured skill says
+ * the projection has not been beating a no-move baseline. This function only
+ * renders that decision; it never infers a direction of its own.
+ */
+function renderOutlook(outlook) {
+  const badge = el("outlookBadge");
+  const text = el("outlookText");
+  const detail = el("outlookDetail");
+  if (!outlook) return;
+
+  document.body.dataset.outlook = outlook.direction;
+  document.body.dataset.confidence = outlook.confidence;
+
+  const horizon = `${outlook.horizon_minutes} min`;
+  if (outlook.direction === "bullish" || outlook.direction === "bearish") {
+    const bullish = outlook.direction === "bullish";
+    badge.textContent = bullish ? "BULLISH" : "BEARISH";
+    const sign = outlook.expected_move > 0 ? "+" : "";
+    text.textContent =
+      `next ${horizon}: ${sign}${formatNumber(outlook.expected_move, 2)} pts ` +
+      `toward ${formatNumber(outlook.target, 2)}`;
+  } else {
+    badge.textContent = "NO CALL";
+    text.textContent = `next ${horizon}: no directional signal`;
+  }
+
+  const bits = [];
+  if (outlook.confidence !== "none") bits.push(`confidence ${outlook.confidence}`);
+  if (outlook.capped_by_skill) bits.push("capped — not beating baseline");
+  else if (outlook.skill != null) {
+    bits.push(`measured skill ${outlook.skill > 0 ? "+" : ""}${(outlook.skill * 100).toFixed(1)}%`);
+  }
+  if (outlook.reason) bits.push(outlook.reason);
+  detail.textContent = bits.join("  ·  ");
+  detail.title = outlook.reason || "";
 }
 
 function renderMetrics(snap) {

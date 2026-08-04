@@ -48,6 +48,12 @@ class Settings:
     forecast_ridge_lambda: float = 10.0
     # Fitted (features, outcome) pairs required before projecting at all.
     forecast_min_samples: int = 200
+    # Horizon for the dashboard's headline bullish/bearish call, in minutes.
+    # Uses the registered timeframe of the same length.
+    signal_horizon_minutes: int = 10
+    # Projected move must reach this fraction of a typical move to be a call
+    # at all; below it the page stays neutral rather than colouring on noise.
+    signal_min_ratio: float = 0.10
 
     # --- storage ----------------------------------------------------------
     data_dir: Path = PROJECT_DIR / "data"
@@ -78,6 +84,8 @@ def load_settings() -> Settings:
         forecast_strength=float(_env("FORECAST_STRENGTH", "1.0")),
         forecast_ridge_lambda=float(_env("FORECAST_RIDGE_LAMBDA", "10")),
         forecast_min_samples=int(_env("FORECAST_MIN_SAMPLES", "200")),
+        signal_horizon_minutes=int(_env("SIGNAL_HORIZON_MINUTES", "10")),
+        signal_min_ratio=float(_env("SIGNAL_MIN_RATIO", "0.10")),
         data_dir=Path(_env("DATA_DIR", str(PROJECT_DIR / "data"))),
         max_1m_bars=int(_env("MAX_1M_BARS", "20000")),
         host=_env("HOST", "127.0.0.1"),

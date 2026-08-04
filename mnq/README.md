@@ -45,6 +45,7 @@ MNQ_FEED=synthetic python run.py
 | **MACD** (12, 26, 9) for the selected timeframe | own pane, metrics panel |
 | **Daily higher highs / lower lows** — HH, LH, HL, LL | markers on 1d, level lines on every timeframe |
 | **5-minute projection** — where the next 5m bar may close, with an uncertainty cone and a measured track record | ray + cone at the right edge, metrics panel |
+| **Bullish / bearish call** for the next 10 minutes | coloured band + page frame |
 | Feed health, bars logged, last bar written | footer |
 
 Every metric is computed for **the timeframe currently on screen**, so the
@@ -85,6 +86,8 @@ Every setting is an environment variable; no file edits required.
 | `MNQ_FORECAST_STRENGTH` | `1.0` | Scales the projected move. `0.5` damps it, `0` disables drift. |
 | `MNQ_FORECAST_RIDGE_LAMBDA` | `10` | Ridge penalty. Larger shrinks coefficients toward no-move. |
 | `MNQ_FORECAST_MIN_SAMPLES` | `200` | Fitted samples required before projecting at all. |
+| `MNQ_SIGNAL_HORIZON_MINUTES` | `10` | Horizon for the headline bullish/bearish call. |
+| `MNQ_SIGNAL_MIN_RATIO` | `0.10` | Projected move must reach this fraction of a typical move to be a call. |
 | `MNQ_DATA_DIR` | `mnq/data` | Where bar logs are written. |
 
 ## The 5-minute projection
@@ -161,6 +164,27 @@ backtest on your own MNQ history before trusting anything it draws.
 
 If the projection overshoots, raise `MNQ_FORECAST_RIDGE_LAMBDA` (stronger
 shrinkage toward no-move) or lower `MNQ_FORECAST_STRENGTH`.
+
+### The bullish / bearish band
+
+The strip across the top of the page turns **green for bullish** and **red for
+bearish** over the next 10 minutes, with a matching frame around the page so
+the call is readable at a glance. The horizon is fitted on the 10-minute
+series, so it is a projection of the next 10-minute bar rather than a
+5-minute one stretched to fit.
+
+Two rules keep the colour honest, because a full-width tint is a strong claim:
+
+* A projection smaller than `MNQ_SIGNAL_MIN_RATIO` of a typical move shows
+  **NO CALL** in grey. Noise-sized drift does not paint the screen.
+* Confidence is capped at "low" whenever measured skill is at or below zero —
+  if the projection is not beating the no-move baseline out of sample, it can
+  never present as a confident call, however large the number it produced. The
+  band says so in words when that happens.
+
+The detail on the right always shows the projected move, its size relative to
+a typical move, and the current measured skill, so the colour is never the
+only thing you have to go on.
 
 ### Adaptive uncertainty band
 
@@ -262,7 +286,7 @@ pip install -r requirements-dev.txt
 python -m pytest
 ```
 
-282 tests cover bucketing (including the DST-shifted session), aggregation,
+299 tests cover bucketing (including the DST-shifted session), aggregation,
 every indicator's maths, the append-only log, the Yahoo response parser
 (offline, using recorded payload shapes), the library fetch, the forecast and
 the ridge solver, the as-of structure series, the volatility model,

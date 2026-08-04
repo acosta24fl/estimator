@@ -256,3 +256,60 @@ main {
   .metrics { width: auto; border-left: 0; border-top: 1px solid var(--border); max-height: 42vh; }
   .chart-wrap { min-height: 320px; }
 }
+
+
+/* ---------- directional call ---------- */
+
+/*
+ * The page tints to the current call. Neutral is the default and deliberately
+ * unremarkable: a full-width colour is a strong assertion, so it only appears
+ * when the projection is big enough relative to a typical move to be worth
+ * asserting.
+ */
+
+.outlook {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  transition: background .35s ease, color .35s ease;
+}
+
+.outlook .badge {
+  font-weight: 750;
+  letter-spacing: .8px;
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.outlook .outlook-text { font-weight: 600; color: var(--text); }
+.outlook .outlook-detail { margin-left: auto; font-size: 11.5px; opacity: .85; text-align: right; }
+
+body[data-outlook="bullish"] .outlook {
+  background: linear-gradient(90deg, rgba(46, 158, 107, .30), rgba(46, 158, 107, .10));
+}
+body[data-outlook="bullish"] .outlook .badge { background: var(--up); color: #04150d; }
+body[data-outlook="bullish"] .outlook .outlook-text { color: #7be3b0; }
+
+body[data-outlook="bearish"] .outlook {
+  background: linear-gradient(90deg, rgba(209, 73, 91, .30), rgba(209, 73, 91, .10));
+}
+body[data-outlook="bearish"] .outlook .badge { background: var(--down); color: #1a0508; }
+body[data-outlook="bearish"] .outlook .outlook-text { color: #ff9aa8; }
+
+/* A thin frame so the call is readable from across the room without the
+   chart itself being tinted. */
+body[data-outlook="bullish"] { box-shadow: inset 0 0 0 3px rgba(46, 158, 107, .55); }
+body[data-outlook="bearish"] { box-shadow: inset 0 0 0 3px rgba(209, 73, 91, .55); }
+
+/* Confidence drives intensity, so a low-confidence call reads as tentative. */
+body[data-confidence="low"] .outlook { filter: saturate(.55) opacity(.9); }
+body[data-confidence="medium"] .outlook { filter: saturate(.85); }
