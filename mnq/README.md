@@ -9,13 +9,34 @@ with session VWAP, bar-size, MACD and daily higher-high / lower-low structure.
 
 ## Quick start
 
+**Windows** — double-click `mnq\start.bat`, or from a Command Prompt:
+
+```
+cd C:\path\to\estimator\mnq
+start.bat
+```
+
+**macOS / Linux**:
+
 ```bash
 cd mnq
+./start.sh
+```
+
+Either one updates from git, installs dependencies on first run, and starts the
+dashboard. Open <http://127.0.0.1:8765>.
+
+The launcher exists mainly to handle one wrinkle: `git pull` has to run at the
+repository root while `run.py` has to run inside `mnq`, so doing it by hand
+means changing directory twice. Manually that is:
+
+```bash
+cd estimator        # repo root - git needs the folder containing .git
+git pull
+cd mnq              # run.py needs the folder containing app/
 pip install -r requirements.txt
 python run.py
 ```
-
-Open <http://127.0.0.1:8765>.
 
 The first run downloads the charting library into `web/vendor/` (about 190 KB,
 once). After that the dashboard needs no third-party host to render. If your
