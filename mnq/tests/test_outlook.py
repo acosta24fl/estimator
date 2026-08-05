@@ -40,6 +40,16 @@ class TestNoCall:
     def test_a_missing_forecast_makes_no_call(self):
         assert build_outlook(None, 10).direction == NEUTRAL
 
+    def test_a_flat_projection_stays_neutral_at_zero_threshold(self):
+        """With the threshold off, a zero move must not read as bearish."""
+        o = build_outlook(forecast(0.0), 10, min_ratio=0.0)
+        assert o.direction == NEUTRAL
+
+    def test_a_tiny_move_does_call_at_zero_threshold(self):
+        """Turning the threshold off is what makes marginal calls visible."""
+        assert build_outlook(forecast(+0.03), 10, min_ratio=0.0).direction == BULLISH
+        assert build_outlook(forecast(-0.03), 10, min_ratio=0.0).direction == BEARISH
+
     def test_zero_band_does_not_divide_by_zero(self):
         assert build_outlook(forecast(+5.0, band=0.0), 10).direction == NEUTRAL
 

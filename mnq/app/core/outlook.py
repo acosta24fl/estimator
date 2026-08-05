@@ -94,6 +94,13 @@ def build_outlook(
         )
         return base
 
+    if move == 0:
+        # Reachable once the threshold is set to zero. A flat projection is not
+        # a bearish one, so it must stay neutral rather than fall through to
+        # the sign test below.
+        base.reason = "projection is exactly flat"
+        return base
+
     base.direction = BULLISH if move > 0 else BEARISH
     base.confidence = _tier(strength)
 
