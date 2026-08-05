@@ -273,6 +273,10 @@ class Engine:
         visible = full[-limit:] if limit else full
         cutoff = visible[0].ts if visible else 0
 
+        # Fitted once and shared: the payload and any indicator that needs a
+        # direction must not be able to disagree about what the call is.
+        outlook = self._safe_outlook()
+
         ctx = IndicatorContext(
             timeframe=tf,
             bars=full,
@@ -284,6 +288,7 @@ class Engine:
             bars_5m=self.bars_for(timeframes.get("5m")),
             predictions=self.predictions,
             paper=self.paper if self.settings.paper_trading else None,
+            outlook=outlook,
         )
 
         indicators: dict[str, Any] = {}
@@ -325,20 +330,20 @@ class Engine:
             "change": None if change is None else round(change, 2),
             "change_pct": None if change_pct is None else round(change_pct, 3),
             "bars": [b.as_chart_dict() for b in visible],
-            "outlook": self._outlook_payload(),
+            "outlook": outlook.as_dict(),
             "paper": self.paper.summary(price) if self.settings.paper_trading else None,
             "indicators": indicators,
             "status": self.status(),
         }
 
-    def _outlook_payload(self) -> dict[str, Any]:
+    def _safe_outlook(self):
         try:
-            return self.current_outlook().as_dict()
+            return self.current_outlook()
         except Exception:  # a bad call must not break the chart
             log.exception("failed to build outlook")
             from .outlook import Outlook
 
-            return Outlook(reason="unavailable").as_dict()
+            return Outlook(reason="unavailable")
 
     def _previous_session_close(self) -> float | None:
         daily = self.daily_series()

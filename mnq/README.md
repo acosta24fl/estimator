@@ -67,6 +67,8 @@ MNQ_FEED=synthetic python run.py
 | **Daily higher highs / lower lows** — HH, LH, HL, LL | markers on 1d, level lines on every timeframe |
 | **5-minute projection** — where the next 5m bar may close, with an uncertainty cone and a measured track record | ray + cone at the right edge, metrics panel |
 | **Bullish / bearish call** for the next 10 minutes | coloured band + page frame |
+| **Next candle envelope** — the high/low the coming bar is unlikely to exceed, on any timeframe | dashed levels with axis labels, metrics panel |
+| **Entry / stop / target** sized off measured excursions | metrics panel |
 | **Simulated trades** taken from that call, with a running profit factor | arrows on the candles, metrics panel, `data/trades.jsonl` |
 | Feed health, bars logged, last bar written | footer |
 
@@ -264,6 +266,137 @@ per record. `GET /api/trades` serves the same thing with the running summary.
 ```bash
 python -c "import json;[print(json.loads(l)) for l in open('data/trades.jsonl')]"
 ```
+
+## Predicting the next candle, on any timeframe
+
+```bash
+python -m app.candles                  # every timeframe
+python -m app.candles --tf 15m         # one, in detail
+python -m app.candles --quantile 0.9   # a wider envelope
+```
+
+The 5-minute projection answers "where will the close be", which is the one
+part of a candle that is close to unpredictable. A candle has four numbers and
+they are not equally hard:
+
+| | |
+| --- | --- |
+| **open** | Essentially known — the next bar opens where this one closed, up to a gap that is zero for contiguous intraday bars and only matters across a session break. Measured, not assumed. |
+| **high / low** | **Genuinely predictable.** Not their direction, their *size*. Excursion scales with volatility, and volatility clusters hard. This is the part worth modelling. |
+| **close** | The hard one. Direction at short horizons is near-random. |
+
+### Method: standardised excursion quantiles
+
+Every completed bar is measured in units of the volatility that was already
+knowable before it opened:
+
+```
+u = (high  - open) / sigma      upward excursion
+d = (open  - low)  / sigma      downward excursion
+c = (close - open) / sigma      net move
+```
+
+`sigma` is the EWMA of Garman-Klass variance, whose entry for bar *i−1* is by
+construction the forecast for bar *i*, so no future information enters. Those
+standardised shapes are stable across volatility regimes — a quiet bar and a
+violent bar look alike once divided by their own sigma — so their empirical
+quantiles transfer to the next bar:
+
+```
+high = open + Q(u, q) * sigma        low = open - Q(d, q) * sigma
+```
+
+Quantiles are empirical rather than Gaussian, because excursions are strongly
+right-skewed and a normal band under-covers exactly in the tails that matter.
+
+### It is calibrated, and that is checkable
+
+"The high will be X" is a claim no model can keep. "The high stays below X
+about 80% of the time" is one that can be checked, and it is — walk-forward,
+fitting only on bars that had already closed. Measured on real MNQ:
+
+| claimed | high coverage | low coverage |
+| --- | --- | --- |
+| 50% | 50.4% | 51.2% |
+| 68% | 68.0% | 70.0% |
+| **80%** | **79.8%** | **80.8%** |
+| 90% | 90.0% | 90.9% |
+| 95% | 94.8% | 95.5% |
+
+Within a percentage point across the whole range. This is the part of the
+system that genuinely works, and it is what makes the envelope usable for
+sizing a stop rather than as decoration.
+
+The dashboard draws the two levels on whichever timeframe is on screen, with
+price labels on the axis so they can be read directly.
+
+## Optimal entry, per timeframe
+
+Given a directional call at a bar's open, place a limit `k` volatility units
+better than the open and hold to the close:
+
+```
+long   entry = open - k*sigma,  filled iff low  <= entry
+short  entry = open + k*sigma,  filled iff high >= entry
+```
+
+`k = 0` is a market order at the open. In standardised units a long at depth
+`k` fills iff `d >= k`, returns `c + k`, and its worst point after entry is
+`-(d - k)` — so fill rate, price improvement, stop distance and target distance
+all fall out of the same three numbers per bar. No simulation, no path guess.
+
+### Trap 1: adverse selection
+
+Waiting for a better price looks free. It is not. A limit below the open only
+fills on bars that first traded down through it, and those are
+disproportionately the bars that kept going. The naive backtest reports
+"average profit per filled trade", which improves with depth because the entry
+is better, while discarding the bars that ran away in your favour and never
+filled — the winners.
+
+So `python -m app.candles` reports **expectancy per attempt**, counting every
+signal whether it filled or not. On a driftless random walk the price
+improvement and the adverse selection cancel to within noise (+2.94 vs −3.18
+points at 0.5 sigma), which is optional stopping working exactly as it must —
+and that control is a permanent test, so a future change that invents an edge
+out of arithmetic gets caught.
+
+### Trap 2: the fill model, which is worse
+
+"Filled because the bar's low touched my limit" assumes a single printed tick
+is a fill you could have had, in size, with your order already resting there.
+On real MNQ that assumption **is the entire result**:
+
+| fill model (5m, depth 0.5 sigma) | per attempt | PF |
+| --- | --- | --- |
+| the low touched the limit | **+4.90 pts** | 4.21 |
+| a 1-minute bar *closed* through it | **−1.10 pts** | 0.71 |
+
+Same bars, same rule, opposite conclusion. And a train/test split does **not**
+catch it — both halves of the data agree, because the bias lives in the fill
+assumption rather than in overfitting. Out-of-sample testing protects against
+choosing the wrong parameters; nothing but a second fill model protects against
+choosing the wrong physics.
+
+Because 1-minute bars are this system's source of truth for every timeframe,
+the conservative model is always available above 1m: a 30-minute bar is thirty
+ordered minute bars, so "did price actually hold below this level" is a
+measurement rather than a guess. Both models are computed, always, printed side
+by side, and any depth where they disagree in sign is flagged
+`<- fill assumption`. The recommendation is scored on the conservative one.
+
+### What it actually says about MNQ
+
+Under honest fills, **no entry depth has positive expectancy on any timeframe** —
+waiting for a pullback is strictly worse than entering at the open, because
+adverse selection exceeds the price improvement at every depth. The tool says
+so in those words, and points at the cause: entry placement cannot rescue a
+direction call with no edge, it can only change how fast the costs arrive.
+
+What remains useful is the excursion sizing. After entering at the open of a
+15-minute bar, price travels a median 18.1 points in your favour and 58.5
+points against at the 90th percentile — the honest shape of the trade, and the
+number to size a stop against.
 
 ## Is it tradeable?
 

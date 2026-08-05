@@ -148,6 +148,8 @@ class IndicatorContext:
     predictions: object | None = None
     #: Live paper trader, for indicators that draw simulated trades.
     paper: object | None = None
+    #: The current bullish/bearish call, for indicators that need a direction.
+    outlook: object | None = None
 
 
 @dataclass
