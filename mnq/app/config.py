@@ -55,6 +55,11 @@ class Settings:
     # at all; below it the page stays neutral rather than colouring on noise.
     signal_min_ratio: float = 0.10
 
+    # --- paper trading ----------------------------------------------------
+    # Simulated only; nothing is ever sent to a broker.
+    paper_trading: bool = True
+    paper_cost_points: float = 0.75
+
     # --- storage ----------------------------------------------------------
     data_dir: Path = PROJECT_DIR / "data"
     max_1m_bars: int = 20_000
@@ -86,6 +91,8 @@ def load_settings() -> Settings:
         forecast_min_samples=int(_env("FORECAST_MIN_SAMPLES", "200")),
         signal_horizon_minutes=int(_env("SIGNAL_HORIZON_MINUTES", "10")),
         signal_min_ratio=float(_env("SIGNAL_MIN_RATIO", "0.10")),
+        paper_trading=_env("PAPER_TRADING", "1") not in ("0", "false", "False", ""),
+        paper_cost_points=float(_env("PAPER_COST_POINTS", "0.75")),
         data_dir=Path(_env("DATA_DIR", str(PROJECT_DIR / "data"))),
         max_1m_bars=int(_env("MAX_1M_BARS", "20000")),
         host=_env("HOST", "127.0.0.1"),

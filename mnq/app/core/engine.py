@@ -27,6 +27,7 @@ from . import timeframes
 from .aggregator import AggregationCache, aggregate
 from .forecast import compute_forecast
 from .outlook import build_outlook
+from .paper import PaperTrader
 from .prediction_log import PredictionLog
 from .store import BarStore
 
@@ -40,6 +41,9 @@ class Engine:
         self.store = store
         self._cache = AggregationCache()
         self.predictions = PredictionLog(settings.data_dir / "predictions.jsonl")
+        self.paper = PaperTrader(
+            settings.data_dir / "trades.jsonl", settings.paper_cost_points
+        )
         self._task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
         self._listeners: set[Callable[[], Any]] = set()
@@ -58,6 +62,8 @@ class Engine:
         self.store.ensure_dirs()
         self.store.load()
         self.predictions.load()
+        if self.settings.paper_trading:
+            log.info("paper trading enabled: %d trades loaded", self.paper.load())
         await self._poll_once(include_daily=True)
         self._task = asyncio.create_task(self._loop(), name="mnq-poll")
 
@@ -123,6 +129,12 @@ class Engine:
             self.record_prediction()
         except Exception:  # a forecasting fault must not stop data collection
             log.exception("failed to record prediction")
+
+        if self.settings.paper_trading:
+            try:
+                self.update_paper_trades(now)
+            except Exception:  # simulated trading must not stop data collection
+                log.exception("failed to update paper trades")
 
         due = (now - self.last_daily_ts) >= self.settings.daily_refresh_seconds
         if include_daily or due:
@@ -236,6 +248,11 @@ class Engine:
             min_ratio=self.settings.signal_min_ratio,
         )
 
+    def update_paper_trades(self, now: float):
+        """Advance the simulated position using the current call."""
+        tf = self.signal_timeframe()
+        return self.paper.update(self.bars_for(tf), self.current_outlook(), now)
+
     def record_prediction(self):
         """Lock the current projection, once per 5-minute bar."""
         return self.predictions.observe(self.current_forecast())
@@ -266,6 +283,7 @@ class Engine:
             now=now,
             bars_5m=self.bars_for(timeframes.get("5m")),
             predictions=self.predictions,
+            paper=self.paper if self.settings.paper_trading else None,
         )
 
         indicators: dict[str, Any] = {}
@@ -308,6 +326,7 @@ class Engine:
             "change_pct": None if change_pct is None else round(change_pct, 3),
             "bars": [b.as_chart_dict() for b in visible],
             "outlook": self._outlook_payload(),
+            "paper": self.paper.summary(price) if self.settings.paper_trading else None,
             "indicators": indicators,
             "status": self.status(),
         }

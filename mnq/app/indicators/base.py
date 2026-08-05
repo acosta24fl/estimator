@@ -146,6 +146,8 @@ class IndicatorContext:
     #: reason about the forecast. None when forecasting is unavailable.
     bars_5m: Sequence[Bar] = ()
     predictions: object | None = None
+    #: Live paper trader, for indicators that draw simulated trades.
+    paper: object | None = None
 
 
 @dataclass

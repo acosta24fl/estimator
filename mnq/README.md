@@ -67,6 +67,7 @@ MNQ_FEED=synthetic python run.py
 | **Daily higher highs / lower lows** — HH, LH, HL, LL | markers on 1d, level lines on every timeframe |
 | **5-minute projection** — where the next 5m bar may close, with an uncertainty cone and a measured track record | ray + cone at the right edge, metrics panel |
 | **Bullish / bearish call** for the next 10 minutes | coloured band + page frame |
+| **Simulated trades** taken from that call, with a running profit factor | arrows on the candles, metrics panel, `data/trades.jsonl` |
 | Feed health, bars logged, last bar written | footer |
 
 Every metric is computed for **the timeframe currently on screen**, so the
@@ -109,7 +110,13 @@ Every setting is an environment variable; no file edits required.
 | `MNQ_FORECAST_MIN_SAMPLES` | `200` | Fitted samples required before projecting at all. |
 | `MNQ_SIGNAL_HORIZON_MINUTES` | `10` | Horizon for the headline bullish/bearish call. |
 | `MNQ_SIGNAL_MIN_RATIO` | `0.10` | Projected move must reach this fraction of a typical move to be a call. |
+| `MNQ_PAPER_TRADING` | `1` | Simulate trades from the call. `0` turns it off. |
+| `MNQ_PAPER_COST_POINTS` | `0.75` | Round-turn cost charged per simulated trade (~$1.50). |
 | `MNQ_DATA_DIR` | `mnq/data` | Where bar logs are written. |
+
+The launchers carry a commented **SETTINGS** block at the top for the ones you
+are most likely to want — uncomment a line in `start.bat` (or `start.sh`)
+instead of typing `set MNQ_...` before every run.
 
 ## The 5-minute projection
 
@@ -221,6 +228,42 @@ volatility clusters. Measured on a regime-switching series (persistence 0.22,
 like real futures) the adaptive band cut the worst per-regime coverage error
 from 32.3pp to 20.6pp; on a series with no clustering it costs 0.6pp instead of
 the 2.6pp an unblended EWMA cost.
+
+### Simulated trades on the chart
+
+**Nothing here reaches a broker.** The bot records what would have happened if
+the call had been traded, using exactly the rule `app.tradetest` replays, so
+live results and backtested results are the same measurement:
+
+* when a new signal-horizon bar opens and the call is bullish or bearish, enter
+  at that bar's **open**,
+* exit at that bar's **close** — a fixed hold, no stop, no target,
+* charge `MNQ_PAPER_COST_POINTS` per round turn.
+
+Entries show as green up-arrows / red down-arrows under the candle, exits as a
+square above it labelled with the net points. An open position also draws a
+dashed line at its entry with a price label on the axis. The metrics panel
+shows the live position, unrealised P&L, and the running closed-trade tally:
+net points, profit factor, win rate, max drawdown.
+
+Both `simulate()` and the live trader roll their results through one shared
+`summarise()`, so the backtest and the dashboard can never report the same
+trades differently.
+
+One guard is worth knowing about: a trade will not open on a bar that is
+already more than 90 seconds old. Filling at the open of a bar that started
+eight minutes ago is a price nobody could have got, so on startup the bot waits
+for the next clean bar rather than backfilling a fantasy entry.
+
+Every trade is appended to `data/trades.jsonl` twice — once when it opens and
+again when it closes — following the same append-only, last-record-wins
+convention as the bar and prediction logs. The file is the history log: it
+survives restarts, reloads on startup, and is plain JSON per line, one trade
+per record. `GET /api/trades` serves the same thing with the running summary.
+
+```bash
+python -c "import json;[print(json.loads(l)) for l in open('data/trades.jsonl')]"
+```
 
 ## Is it tradeable?
 

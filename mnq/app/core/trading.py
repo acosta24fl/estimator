@@ -132,30 +132,39 @@ def simulate(
             )
         )
 
-    stats = TradeStats(cost_points=cost_points, trades=len(trades))
+    return summarise([t.net for t in trades], cost_points), trades
+
+
+def summarise(nets: Sequence[float], cost_points: float = 0.0) -> TradeStats:
+    """Roll a sequence of net results into the standard statistics.
+
+    Shared by the replay backtest and the live paper trader so the two can
+    never report the same trades differently.
+    """
+    stats = TradeStats(cost_points=cost_points, trades=len(nets))
     equity = 0.0
     peak = 0.0
     wins: list[float] = []
     losses: list[float] = []
-    for trade in trades:
-        stats.net_points += trade.net
-        if trade.net > 0:
+    for net in nets:
+        stats.net_points += net
+        if net > 0:
             stats.wins += 1
-            stats.gross_profit += trade.net
-            wins.append(trade.net)
-        elif trade.net < 0:
+            stats.gross_profit += net
+            wins.append(net)
+        elif net < 0:
             stats.losses += 1
-            stats.gross_loss += -trade.net
-            losses.append(-trade.net)
+            stats.gross_loss += -net
+            losses.append(-net)
         else:
             stats.scratches += 1
-        equity += trade.net
+        equity += net
         peak = max(peak, equity)
         stats.max_drawdown = max(stats.max_drawdown, peak - equity)
 
     stats.avg_win = (sum(wins) / len(wins)) if wins else 0.0
     stats.avg_loss = (sum(losses) / len(losses)) if losses else 0.0
-    return stats, trades
+    return stats
 
 
 def sharpe(trades: Sequence[Trade]) -> float | None:

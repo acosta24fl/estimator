@@ -58,6 +58,20 @@ async def get_snapshot(
         raise HTTPException(status_code=404, detail=str(exc)) from None
 
 
+@router.get("/api/trades")
+async def get_trades(request: Request, limit: int = Query(200, ge=1, le=5000)):
+    """Simulated trade history, newest last, with the running tally."""
+    engine = _engine(request)
+    if not engine.settings.paper_trading:
+        return {"enabled": False, "trades": [], "summary": None}
+    price = engine.quote.price if engine.quote else None
+    return {
+        "enabled": True,
+        "trades": [t.as_dict() for t in engine.paper.trades()[-limit:]],
+        "summary": engine.paper.summary(price),
+    }
+
+
 @router.get("/api/status")
 async def get_status(request: Request):
     return _engine(request).status()
