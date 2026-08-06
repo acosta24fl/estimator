@@ -127,24 +127,25 @@ class NextCandle(Indicator):
             ),
         ]
 
-        direction = self._side(ctx)
-        if direction is None:
-            stats.append(
-                Stat(
-                    "next_entry",
-                    "Entry",
-                    "no call",
-                    hint="Entry placement is only meaningful once there is a direction.",
-                )
-            )
-            return stats
-
+        direction, live = self._side(ctx)
         rec = self._recommendation(ctx, direction, step)
         side = "long" if direction == LONG else "short"
+        # Under NO CALL the side comes from the sign of a projection too small
+        # to act on, so the entry is hypothetical. Say so rather than hiding it:
+        # "where would I enter if I took this" is worth knowing before there is
+        # a signal, and the stop and target sizing does not depend on the call
+        # at all.
+        qualifier = "" if live else ", hypothetical"
 
         if rec.best is None:
             stats.append(
-                Stat("next_entry", "Entry", "at the open", tone="warn", hint=rec.reason)
+                Stat(
+                    "next_entry",
+                    f"Entry ({side}{qualifier})",
+                    "at the open",
+                    tone="warn",
+                    hint=rec.reason,
+                )
             )
         else:
             offset_pts = rec.best.points(rec.best.offset)
@@ -156,7 +157,7 @@ class NextCandle(Indicator):
             stats.append(
                 Stat(
                     "next_entry",
-                    f"Entry ({side})",
+                    f"Entry ({side}{qualifier})",
                     label,
                     tone="warn" if not rec.trustworthy else "neutral",
                     hint=rec.reason,
@@ -220,19 +221,23 @@ class NextCandle(Indicator):
         return rec
 
     @staticmethod
-    def _side(ctx: IndicatorContext) -> int | None:
-        """The direction the dashboard is currently calling, if any.
+    def _side(ctx: IndicatorContext) -> tuple[int, bool]:
+        """Which side to study, and whether it is a live call or a guess.
 
         An open simulated position wins over the headline call: while a trade
-        is live, the entry question is about *that* trade's side.
+        is live, the entry question is about *that* trade's side. Failing both,
+        fall back to the sign of the projection — under NO CALL it is too small
+        to act on, but it still points somewhere, and it beats showing nothing.
         """
         paper = getattr(ctx, "paper", None)
         position = getattr(paper, "open_trade", None) if paper is not None else None
         if position is not None:
-            return LONG if position.direction > 0 else SHORT
-        call = getattr(getattr(ctx, "outlook", None), "direction", None)
+            return (LONG if position.direction > 0 else SHORT), True
+
+        outlook = getattr(ctx, "outlook", None)
+        call = getattr(outlook, "direction", None)
         if call == "bullish":
-            return LONG
+            return LONG, True
         if call == "bearish":
-            return SHORT
-        return None
+            return SHORT, True
+        return (SHORT if getattr(outlook, "expected_move", 0.0) < 0 else LONG), False

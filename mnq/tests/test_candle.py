@@ -202,9 +202,35 @@ class TestChartRendering:
         assert result.series["next_high"] == []
         assert result.stats[0].value == "—"
 
-    def test_no_call_means_no_entry_advice(self):
+    def test_no_call_still_shows_the_entry_study(self):
+        """The stop and target sizing does not depend on the call at all, and
+        NO CALL is the state the dashboard is in most of the time — hiding the
+        study behind a signal hides it permanently."""
         stats = {s.key: s.value for s in NextCandle().compute(self._ctx(walk(300))).stats}
-        assert stats["next_entry"] == "no call"
+        assert "next_entry" in stats
+        assert "next_stop" in stats and "next_target" in stats
+
+    def test_a_hypothetical_side_is_labelled_as_one(self):
+        labels = {s.key: s.label for s in NextCandle().compute(self._ctx(walk(300))).stats}
+        assert "hypothetical" in labels["next_entry"]
+
+    def test_a_live_call_is_not_labelled_hypothetical(self):
+        class Call:
+            direction = "bearish"
+
+        result = NextCandle().compute(self._ctx(walk(300), outlook=Call()))
+        labels = {s.key: s.label for s in result.stats}
+        assert "hypothetical" not in labels["next_entry"]
+        assert "short" in labels["next_entry"]
+
+    def test_the_side_follows_the_projection_when_there_is_no_call(self):
+        class Drifting:
+            direction = "neutral"
+            expected_move = -0.58  # too small to call, but it points down
+
+        result = NextCandle().compute(self._ctx(walk(300), outlook=Drifting()))
+        labels = {s.key: s.label for s in result.stats}
+        assert "short" in labels["next_entry"]
 
     def test_a_bullish_call_produces_an_entry(self):
         class Call:
