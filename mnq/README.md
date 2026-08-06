@@ -121,8 +121,14 @@ are most likely to want — uncomment a line in `start.bat` (or `start.sh`)
 instead of typing `set MNQ_...` before every run.
 
 To edit `start.bat`, **right-click it and choose Edit** (or Open with →
-Notepad). Double-clicking runs it. Delete the `REM ` in front of a `set` line,
-save, and run it again.
+Notepad). Double-clicking runs it. Delete the `REM ` in front of a `set` line —
+only the `set` lines do anything; every other `REM` is an explanation — save,
+and run it again. In Notepad, Ctrl+F and the setting's name finds it.
+
+The one most people want has its own launcher, so no editing is needed:
+**`start-colour.bat`** runs the dashboard with `MNQ_SIGNAL_MIN_RATIO=0`, which
+makes the band commit on every call rather than showing NO CALL whenever the
+projection is under a tenth of a typical move.
 
 `start.bat` must keep Windows CRLF line endings and stay pure ASCII —
 `.gitattributes` pins this and `tests/test_launchers.py` enforces it. cmd.exe
