@@ -72,6 +72,28 @@ async def get_trades(request: Request, limit: int = Query(200, ge=1, le=5000)):
     }
 
 
+@router.get("/api/decisions")
+async def get_decisions(
+    request: Request,
+    limit: int = Query(50, ge=1, le=1000),
+    trade_id: str | None = Query(None, description="One trade's full snapshot"),
+):
+    """Why each simulated trade was taken — every parameter, frozen at entry."""
+    engine = _engine(request)
+    if not engine.settings.paper_trading:
+        return {"enabled": False, "decisions": []}
+    if trade_id is not None:
+        decision = engine.decisions.get(trade_id)
+        if decision is None:
+            raise HTTPException(status_code=404, detail=f"no decision for {trade_id}")
+        return {"enabled": True, "decisions": [decision.as_dict()]}
+    return {
+        "enabled": True,
+        "count": len(engine.decisions),
+        "decisions": [d.as_dict() for d in engine.decisions.all()[-limit:]],
+    }
+
+
 @router.get("/api/status")
 async def get_status(request: Request):
     return _engine(request).status()

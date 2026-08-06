@@ -437,6 +437,66 @@ What remains useful is the excursion sizing. After entering at the open of a
 points against at the 90th percentile — the honest shape of the trade, and the
 number to size a stop against.
 
+## The decision log
+
+```bash
+python -m app.decisions                      # the last few, one line each
+python -m app.decisions --full               # every parameter of the newest
+python -m app.decisions --trade 1785983400   # one trade in full
+python -m app.decisions --by fit.samples     # does this parameter matter?
+python -m app.decisions --fields             # what can I group by?
+```
+
+Three logs, three jobs — all append-only JSONL under `data/`, last record wins:
+
+| file | one record per | answers |
+| --- | --- | --- |
+| `bars/1m/*.jsonl` | closed minute | what the market did |
+| `predictions.jsonl` | projection | what was predicted, scored against the outcome at read time |
+| `trades.jsonl` | trade open + close | what was traded and what it made |
+| `decisions.jsonl` | trade | **what the system believed when it acted** |
+
+The first three answer *what happened*. Only the last answers *why*, and it has
+to, because a one-line prose `reason` is not an audit trail — you cannot sort by
+it, group by it, or ask whether the trades taken on a strong momentum term
+actually did better.
+
+Each decision freezes, at the moment of entry: the outlook (direction,
+confidence, strength, whether confidence was capped by skill), the forecast
+(target, band, volatility), **every factor's score, fitted coefficient and
+points contribution**, the fit (samples, R²), the measured track record *as it
+stood then*, the next-candle envelope, the entry study, market state, and every
+config value in force. When the trade closes, the outcome is appended to the
+same record; the beliefs are never rewritten.
+
+The fitted coefficients are the part that matters most. The ridge refits on
+every poll, so a trade taken with a momentum coefficient of +1.34 came from a
+materially different model than one taken at +0.2. Without recording them the
+decision cannot be reconstructed afterwards at all.
+
+Snapshots are taken **only on entry**, never recomputed on read. A parameter
+re-derived later from current history is not what the system believed then, and
+a log that quietly rewrites its own past is worse than no log.
+
+`--by` is what the log is for — split closed trades into equal-count buckets of
+any parameter and see whether it separates winners from losers:
+
+```
+closed trades grouped by factors.momentum.points   (12 trades)
+
+  range                     trades   win%     PF    net pts   avg pts
+  0.68 to 0.82                  4  100.0%  n/a     +27.50    +6.875
+  0.84 to 0.99                  4  50.0%   0.72      -5.25    -1.312
+  1.02 to 1.05                  4  50.0%   0.69      -3.50    -0.875
+```
+
+Equal-count buckets so every row rests on the same number of trades. Read a
+monotone column as interesting and everything else as noise — at a dozen trades
+the example above is entirely noise, and it is shown here to make the point that
+the tool will happily produce a beautiful-looking table from nothing.
+
+`GET /api/decisions` serves the same records, `?trade_id=` for one.
+
 ## Is it tradeable?
 
 ```bash

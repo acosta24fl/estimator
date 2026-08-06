@@ -23,8 +23,10 @@ from ..config import Settings
 from ..feed import PriceFeed
 from ..indicators import IndicatorContext, all_indicators
 from ..models import Bar, Quote
-from . import timeframes
+from . import candle, entries, timeframes
 from .aggregator import AggregationCache, aggregate
+from .decisions import Decision, DecisionLog
+from .features import session_vwap
 from .forecast import compute_forecast
 from .outlook import build_outlook
 from .paper import PaperTrader
@@ -44,6 +46,7 @@ class Engine:
         self.paper = PaperTrader(
             settings.data_dir / "trades.jsonl", settings.paper_cost_points
         )
+        self.decisions = DecisionLog(settings.data_dir / "decisions.jsonl")
         self._task: asyncio.Task | None = None
         self._stopping = asyncio.Event()
         self._listeners: set[Callable[[], Any]] = set()
@@ -63,7 +66,11 @@ class Engine:
         self.store.load()
         self.predictions.load()
         if self.settings.paper_trading:
-            log.info("paper trading enabled: %d trades loaded", self.paper.load())
+            log.info(
+                "paper trading enabled: %d trades, %d decisions loaded",
+                self.paper.load(),
+                self.decisions.load(),
+            )
         await self._poll_once(include_daily=True)
         self._task = asyncio.create_task(self._loop(), name="mnq-poll")
 
@@ -249,9 +256,113 @@ class Engine:
         )
 
     def update_paper_trades(self, now: float):
-        """Advance the simulated position using the current call."""
+        """Advance the simulated position using the current call.
+
+        Any trade that opens gets its full decision snapshot written here, in
+        the same poll, while the numbers that produced it are still the live
+        ones. Rebuilding them later from current history would record what the
+        model believes *now*, not what it believed when it acted.
+        """
         tf = self.signal_timeframe()
-        return self.paper.update(self.bars_for(tf), self.current_outlook(), now)
+        bars = self.bars_for(tf)
+        outlook = self.current_outlook()
+        changed = self.paper.update(bars, outlook, now)
+        for trade in changed:
+            try:
+                if trade.is_open:
+                    self.decisions.record(self.build_decision(trade, tf, outlook))
+                else:
+                    self.decisions.close(trade)
+            except Exception:  # an audit-trail fault must not stop trading
+                log.exception("failed to log decision for trade %s", trade.trade_id)
+        return changed
+
+    def build_decision(self, trade, tf, outlook) -> Decision:
+        """Freeze every number behind one entry."""
+        bars_5m = self.bars_for(timeframes.get("5m"))
+        forecast = compute_forecast(
+            self.bars_for(tf),
+            self.daily_series(),
+            timeframes.session_bucket(),
+            horizon_seconds=tf.nominal_seconds,
+            strength=self.settings.forecast_strength,
+            ridge_lambda=self.settings.forecast_ridge_lambda,
+            min_fit_samples=self.settings.forecast_min_samples,
+        )
+        payload = forecast.as_dict()
+        factors = payload.pop("factors", [])
+        fit = payload.pop("fit", {})
+
+        completed = [b for b in self.bars_for(tf) if b.complete]
+        envelope = candle.predict(
+            completed,
+            timeframe=tf.key,
+            step_seconds=tf.nominal_seconds,
+        )
+        study = entries.recommend(
+            completed,
+            timeframe=tf.key,
+            direction=trade.direction,
+            cost_points=self.settings.paper_cost_points,
+            minutes=self.store.minute_series(),
+            step_seconds=tf.nominal_seconds,
+        )
+        best = study.best or study.at_market
+
+        vwap = session_vwap(completed, timeframes.session_bucket())
+        return Decision(
+            trade_id=trade.trade_id,
+            ts=trade.opened_ts,
+            symbol=self.settings.symbol,
+            timeframe=tf.key,
+            horizon_minutes=tf.nominal_seconds // 60,
+            direction=trade.direction,
+            entry=trade.entry,
+            outlook=outlook.as_dict(),
+            forecast=payload,
+            factors=factors,
+            fit=fit,
+            accuracy=self.predictions.accuracy(bars_5m),
+            envelope=envelope.as_dict(),
+            entry_study={
+                "fill_model": study.fill_model,
+                "trustworthy": study.trustworthy,
+                "contested": study.contested,
+                "reason": study.reason,
+                "offset": None if best is None else best.offset,
+                "fill_rate": None if best is None else round(best.fill_rate, 4),
+                "per_attempt_points": (
+                    None if best is None else round(best.points(best.per_attempt), 3)
+                ),
+                "suggested_stop_points": (
+                    None if best is None else round(best.points(best.p90_adverse), 2)
+                ),
+                "suggested_target_points": (
+                    None if best is None else round(best.points(best.median_favourable), 2)
+                ),
+            },
+            market={
+                "price": self.quote.price if self.quote else None,
+                "prev_close": self._previous_session_close(),
+                "bar_open": completed[-1].close if completed else None,
+                "session_vwap": round(vwap[-1], 2) if vwap else None,
+                "vwap_distance": (
+                    round(completed[-1].close - vwap[-1], 2) if (vwap and completed) else None
+                ),
+                "completed_bars": len(completed),
+                "minute_bars": self.store.minute_count,
+            },
+            config={
+                "cost_points": self.settings.paper_cost_points,
+                "signal_horizon_minutes": self.settings.signal_horizon_minutes,
+                "signal_min_ratio": self.settings.signal_min_ratio,
+                "forecast_strength": self.settings.forecast_strength,
+                "forecast_ridge_lambda": self.settings.forecast_ridge_lambda,
+                "forecast_min_samples": self.settings.forecast_min_samples,
+                "max_entry_age": self.paper.max_entry_age,
+                "feed": self.feed.key,
+            },
+        )
 
     def record_prediction(self):
         """Lock the current projection, once per 5-minute bar."""
