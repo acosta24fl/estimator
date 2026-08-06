@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from app.config import load_settings
 from app.core.outlook import Outlook
 from app.core.paper import LONG, SHORT, PaperTrade, PaperTrader
@@ -367,3 +369,75 @@ class TestOpenPositionMarker:
             self._ctx(t, bars=[bar(BASE, 100.0, 104.0, False)])).stats}
         assert stats["paper_open_move"] == 4.0
         assert stats["paper_open_pnl"] == 3.25
+
+
+class TestWaitingReadout:
+    """A flat book with a live call has to say what it is waiting for.
+
+    Entries fill at a bar's open, so on a 10-minute horizon there is a
+    90-second window once every 10 minutes. Without a readout the panel shows
+    Flat while the band shows BULLISH, which reads as a broken bot.
+    """
+
+    BAR = 1_700_000_000 // 600 * 600
+
+    @staticmethod
+    def _ctx(trader_obj, now, direction="bullish", horizon=10):
+        settings = replace(load_settings(), signal_horizon_minutes=horizon)
+
+        class Call:
+            pass
+
+        call = Call()
+        call.direction = direction
+        return IndicatorContext(
+            timeframe=get("15m"),
+            bars=[],
+            minute_bars=[],
+            daily_bars=[],
+            session=SessionBucket("America/New_York", 18),
+            settings=settings,
+            now=now,
+            paper=trader_obj,
+            outlook=call,
+        )
+
+    def test_it_counts_down_to_the_next_bar(self, tmp_path):
+        t = trader(tmp_path)
+        stat = PaperTrades._waiting_for(t, self._ctx(t, self.BAR + 200))[0]
+        assert stat.value == "6m 40s"
+
+    def test_inside_the_window_it_says_the_next_poll(self, tmp_path):
+        t = trader(tmp_path)
+        stat = PaperTrades._waiting_for(t, self._ctx(t, self.BAR + 5))[0]
+        assert stat.value == "the next poll"
+
+    def test_the_window_matches_the_traders_own_rule(self, tmp_path):
+        """The readout must not promise a fill the trader would refuse."""
+        t = trader(tmp_path)
+        t.max_entry_age = 30
+        assert PaperTrades._waiting_for(t, self._ctx(t, self.BAR + 20))[0].value == "the next poll"
+        assert PaperTrades._waiting_for(t, self._ctx(t, self.BAR + 40))[0].value != "the next poll"
+
+    def test_no_call_says_so_instead_of_counting(self, tmp_path):
+        t = trader(tmp_path)
+        stat = PaperTrades._waiting_for(t, self._ctx(t, self.BAR + 200, "neutral"))[0]
+        assert stat.value == "a call"
+
+    def test_it_follows_the_configured_horizon(self, tmp_path):
+        t = trader(tmp_path)
+        stat = PaperTrades._waiting_for(t, self._ctx(t, self.BAR + 100, horizon=5))[0]
+        assert stat.value == "3m 20s"  # 300s bar, 100s in
+
+    def test_it_appears_in_the_panel_when_flat(self, tmp_path):
+        t = trader(tmp_path)
+        ctx = self._ctx(t, self.BAR + 200)
+        keys = {s.key for s in PaperTrades().compute(ctx).stats}
+        assert "paper_waiting" in keys
+
+    def test_it_disappears_once_a_position_is_open(self, tmp_path):
+        t = trader(tmp_path)
+        t.update([bar(BASE, 100.0, 101.0, complete=False)], call("bullish"), BASE + 5)
+        ctx = self._ctx(t, self.BAR + 200)
+        keys = {s.key for s in PaperTrades().compute(ctx).stats}
+        assert "paper_waiting" not in keys

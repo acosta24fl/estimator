@@ -139,6 +139,50 @@ class PaperTrades(Indicator):
         )
 
     @staticmethod
+    def _waiting_for(trader, ctx: IndicatorContext) -> list[Stat]:
+        """Say what a flat book is waiting on, and for how long.
+
+        Entries fill at a bar's *open*, so the trader refuses a bar already well
+        under way — filling at the open of a bar that started eight minutes ago
+        is a price nobody could have got. On a 10-minute horizon that leaves a
+        90-second window once every 10 minutes, and with no readout the
+        dashboard just sits there saying Flat while the band says BULLISH, which
+        reads as a broken bot rather than a working one.
+        """
+        call = getattr(getattr(ctx, "outlook", None), "direction", None)
+        if call not in ("bullish", "bearish"):
+            return [
+                Stat(
+                    "paper_waiting",
+                    "  ↳ Waiting For",
+                    "a call",
+                    hint="Nothing opens while the outlook is NO CALL.",
+                )
+            ]
+
+        horizon_minutes = max(int(ctx.settings.signal_horizon_minutes), 1)
+        horizon = horizon_minutes * 60
+        # Buckets are epoch-aligned, so the next boundary is pure arithmetic.
+        remaining = horizon - (int(ctx.now) % horizon)
+        window = int(getattr(trader, "max_entry_age", 90))
+
+        if remaining >= horizon - window:
+            # Inside the entry window already; the next poll should fill it.
+            value, hint = "the next poll", (
+                f"The {horizon_minutes}m bar opened moments ago and the call is "
+                f"{call} — a trade fills on the next poll."
+            )
+        else:
+            value = f"{remaining // 60}m {remaining % 60:02d}s"
+            hint = (
+                f"The call is {call}. Entries fill at a bar's open, so the next "
+                f"chance is when the {horizon_minutes}m bar turns over. A bar "
+                f"more than {window}s old is refused rather than filled at a "
+                "price nobody could have got."
+            )
+        return [Stat("paper_waiting", "  ↳ Next Entry", value, hint=hint)]
+
+    @staticmethod
     def _stats(trader, ctx: IndicatorContext) -> list[Stat]:
         price = ctx.bars[-1].close if ctx.bars else None
         stats = trader.stats()
@@ -147,6 +191,7 @@ class PaperTrades(Indicator):
         position = trader.open_trade
         if position is None:
             out.append(Stat("paper_position", "Position", "Flat", tone="neutral"))
+            out += PaperTrades._waiting_for(trader, ctx)
         else:
             unrealised = position.unrealised(price) if price is not None else None
             tone = "neutral" if unrealised is None else ("up" if unrealised > 0 else "down")

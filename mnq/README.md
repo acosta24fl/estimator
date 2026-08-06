@@ -272,10 +272,29 @@ Both `simulate()` and the live trader roll their results through one shared
 `summarise()`, so the backtest and the dashboard can never report the same
 trades differently.
 
+An open position also gets a **vertical marker on the candle it opened on**,
+spanning the chart, with a badge showing the side, the entry, and the live
+result — the way a broker platform marks a fill. It tints green or red with the
+position and updates every poll.
+
 One guard is worth knowing about: a trade will not open on a bar that is
 already more than 90 seconds old. Filling at the open of a bar that started
-eight minutes ago is a price nobody could have got, so on startup the bot waits
-for the next clean bar rather than backfilling a fantasy entry.
+eight minutes ago is a price nobody could have got, so the bot waits for the
+next clean bar rather than backfilling a fantasy entry.
+
+That guard has a visible consequence. On the default 10-minute horizon it
+leaves a 90-second entry window once every 10 minutes, so a freshly started
+dashboard can show **Flat** for several minutes while the band already says
+BULLISH. That is the rule working, not a stall, and the panel now says so:
+
+```
+Position          Flat
+  ↳ Next Entry    6m 40s
+```
+
+counting down to the bar turnover, or `the next poll` once inside the window,
+or `a call` when the outlook is NO CALL. Shorten the wait with
+`MNQ_SIGNAL_HORIZON_MINUTES=5` (or `1`) if you want to watch it fill sooner.
 
 Every trade is appended to `data/trades.jsonl` twice — once when it opens and
 again when it closes — following the same append-only, last-record-wins
