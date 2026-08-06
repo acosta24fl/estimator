@@ -1,0 +1,5 @@
+# cmd.exe seeks batch files by byte offset; Unix line endings desynchronise
+# that arithmetic until it executes a fragment of a comment line.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.sh  text eol=lf

@@ -50,8 +50,27 @@ python3 -c "import fastapi, uvicorn, httpx" >/dev/null 2>&1 || {
     }
 }
 
+# Almost always this same dashboard still running in another terminal. Binding
+# would fail with "address already in use", so catch it where we can explain it.
+port="${MNQ_PORT:-8765}"
+busy="$(lsof -ti "tcp:${port}" -sTCP:LISTEN 2>/dev/null || true)"
+if [ -n "$busy" ]; then
+    echo
+    echo "  Port ${port} is already in use by process ${busy}."
+    echo "  That is almost always this dashboard still open in another terminal."
+    printf "  Stop it and start fresh? [y/N] "
+    read -r reply
+    case "$reply" in
+        [Yy]*) kill -9 $busy 2>/dev/null; echo "  Stopped ${busy}." ;;
+        *)
+            echo "  Left it running. Close it, or run with MNQ_PORT=8766 ./start.sh"
+            exit 1
+            ;;
+    esac
+fi
+
 echo
-echo "=== Starting dashboard - open http://127.0.0.1:8765 ==="
+echo "=== Starting dashboard - open http://127.0.0.1:${port} ==="
 echo "    Press Ctrl+C to stop."
 echo
 exec python3 run.py

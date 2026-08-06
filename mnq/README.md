@@ -120,6 +120,20 @@ The launchers carry a commented **SETTINGS** block at the top for the ones you
 are most likely to want — uncomment a line in `start.bat` (or `start.sh`)
 instead of typing `set MNQ_...` before every run.
 
+To edit `start.bat`, **right-click it and choose Edit** (or Open with →
+Notepad). Double-clicking runs it. Delete the `REM ` in front of a `set` line,
+save, and run it again.
+
+`start.bat` must keep Windows CRLF line endings and stay pure ASCII —
+`.gitattributes` pins this and `tests/test_launchers.py` enforces it. cmd.exe
+seeks through a batch file by byte offset rather than reading it line by line,
+so Unix line endings make those offsets drift until one lands mid-word and it
+tries to execute a fragment of a comment, with an error naming a word that
+appears nowhere in the file.
+
+If the port is already in use, the launcher now says which process holds it and
+offers to stop it, instead of failing at bind time with `WinError 10048`.
+
 ## The 5-minute projection
 
 The dashboard projects where the forming 5-minute bar may close, drawn as a
