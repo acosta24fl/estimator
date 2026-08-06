@@ -132,6 +132,34 @@ class Marker:
 
 
 @dataclass
+class VerticalLine:
+    """A time-anchored marker drawn across the full height of the chart.
+
+    Series and markers both attach to a *bar*; this attaches to a *moment*, the
+    way a broker platform marks the candle an order filled on. The chart library
+    has no such primitive, so the browser positions it over the canvas from the
+    time scale — which is why only the time matters here, not a price.
+    """
+
+    time: int
+    label: str = ""  # headline text on the badge
+    detail: str = ""  # smaller second line
+    color: str = "#b07cd8"
+    tone: str = "neutral"  # neutral | up | down — tints the badge
+    style: str = "dashed"  # solid | dashed
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "time": self.time,
+            "label": self.label,
+            "detail": self.detail,
+            "color": self.color,
+            "tone": self.tone,
+            "style": self.style,
+        }
+
+
+@dataclass
 class IndicatorContext:
     """Everything an indicator is allowed to look at."""
 
@@ -157,12 +185,14 @@ class IndicatorResult:
     series: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
     markers: list[Marker] = field(default_factory=list)
     stats: list[Stat] = field(default_factory=list)
+    lines: list[VerticalLine] = field(default_factory=list)
 
     def as_dict(self) -> dict[str, Any]:
         return {
             "series": self.series,
             "markers": [m.as_dict() for m in self.markers],
             "stats": [s.as_dict() for s in self.stats],
+            "lines": [ln.as_dict() for ln in self.lines],
         }
 
 

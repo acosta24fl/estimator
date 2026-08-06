@@ -23,6 +23,7 @@ from .base import (
     RenderSpec,
     SeriesSpec,
     Stat,
+    VerticalLine,
 )
 
 _LONG = "#2e9e6b"
@@ -101,9 +102,41 @@ class PaperTrades(Indicator):
                 for bar in ctx.bars
                 if bar.ts >= bucket.start(position.opened_ts)
             ]
+            result.lines = [self._entry_line(position, ctx, bucket)]
 
         result.stats = self._stats(trader, ctx)
         return result
+
+    @staticmethod
+    def _entry_line(position, ctx: IndicatorContext, bucket) -> VerticalLine:
+        """The vertical marker on the candle the position opened on.
+
+        Snapped to the displayed timeframe's bucket for the same reason the
+        arrows are: on a 15-minute chart there is no candle at a 10-minute
+        boundary, and a line drawn there would sit between candles.
+        """
+        price = ctx.bars[-1].close if ctx.bars else None
+        moved = None if price is None else position.move(price)
+        net = None if price is None else position.unrealised(price)
+
+        if moved is None:
+            detail = "waiting for a price"
+            tone = "neutral"
+        else:
+            tone = "up" if moved > 0 else ("down" if moved < 0 else "neutral")
+            # The sign belongs in front of the currency symbol, not between it
+            # and the digits, which is what a bare +,.2f produces.
+            dollars = net * DOLLARS_PER_POINT
+            money = f"{'-' if dollars < 0 else '+'}${abs(dollars):,.2f}"
+            detail = f"{moved:+.2f} pts from entry  ·  {net:+.2f} net ({money})"
+
+        return VerticalLine(
+            time=bucket.start(position.opened_ts),
+            label=f"{'LONG' if position.direction > 0 else 'SHORT'} @ {position.entry:,.2f}",
+            detail=detail,
+            color=_LONG if position.direction > 0 else _SHORT,
+            tone=tone,
+        )
 
     @staticmethod
     def _stats(trader, ctx: IndicatorContext) -> list[Stat]:
@@ -126,6 +159,18 @@ class PaperTrades(Indicator):
                     hint=position.reason,
                 )
             )
+            moved = position.move(price) if price is not None else None
+            out.append(
+                Stat(
+                    "paper_open_move",
+                    "  ↳ Moved From Entry",
+                    None if moved is None else round(moved, 2),
+                    unit="pts",
+                    tone="neutral" if moved is None else ("up" if moved > 0 else "down"),
+                    signed=True,
+                    hint="Distance travelled in the trade's favour, before costs.",
+                )
+            )
             out.append(
                 Stat(
                     "paper_open_pnl",
@@ -134,6 +179,10 @@ class PaperTrades(Indicator):
                     unit="pts",
                     tone=tone,
                     signed=True,
+                    hint=(
+                        "What the position is worth after the "
+                        f"{position.cost_points} pts round-turn cost."
+                    ),
                 )
             )
 

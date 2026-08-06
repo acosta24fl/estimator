@@ -57,9 +57,18 @@ class PaperTrade:
     def side(self) -> str:
         return "long" if self.direction == LONG else "short"
 
+    def move(self, price: float) -> float:
+        """Points travelled from entry in the trade's favour, before costs.
+
+        This is the number a broker platform shows next to an open position —
+        "how far has it gone" — and it is not the same as what the trade is
+        worth, which is why both exist.
+        """
+        return self.direction * (price - self.entry)
+
     def unrealised(self, price: float) -> float:
         """Mark-to-market in points, costs included."""
-        return self.direction * (price - self.entry) - self.cost_points
+        return self.move(price) - self.cost_points
 
     def close(self, price: float, ts: int) -> None:
         self.exit = price
@@ -232,6 +241,10 @@ class PaperTrader:
                 "open_unrealised": (
                     None if (position is None or price is None)
                     else round(position.unrealised(price), 2)
+                ),
+                "open_move": (
+                    None if (position is None or price is None)
+                    else round(position.move(price), 2)
                 ),
             }
         )

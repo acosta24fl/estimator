@@ -277,3 +277,93 @@ class TestChartRendering:
         result = PaperTrades().compute(self._ctx(None))
         assert result.markers == []
         assert [s.value for s in result.stats] == ["Off"]
+
+
+class TestOpenPositionMarker:
+    """The broker-style vertical marker on the candle a position opened on."""
+
+    @staticmethod
+    def _ctx(trader_obj, tf_key="10m", bars=()):
+        return IndicatorContext(
+            timeframe=get(tf_key),
+            bars=list(bars),
+            minute_bars=[],
+            daily_bars=[],
+            session=SessionBucket("America/New_York", 18),
+            settings=load_settings(),
+            now=BASE,
+            paper=trader_obj,
+        )
+
+    def _open_long(self, tmp_path, cost=0.75):
+        t = trader(tmp_path, cost=cost)
+        t.update([bar(BASE, 100.0, 101.0, complete=False)], call("bullish"), BASE + 5)
+        return t
+
+    def test_a_flat_book_draws_no_marker(self, tmp_path):
+        assert PaperTrades().compute(self._ctx(trader(tmp_path))).lines == []
+
+    def test_an_open_position_draws_one(self, tmp_path):
+        t = self._open_long(tmp_path)
+        lines = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 104.0, False)])).lines
+        assert len(lines) == 1
+        assert lines[0].label == "LONG @ 100.00"
+
+    def test_it_sits_on_the_entry_bar(self, tmp_path):
+        t = self._open_long(tmp_path)
+        line = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 104.0, False)])).lines[0]
+        assert line.time == BASE
+
+    def test_it_snaps_to_the_displayed_timeframe(self, tmp_path):
+        """A line between candles reads as a position opened on nothing."""
+        t = self._open_long(tmp_path)
+        ctx = self._ctx(t, "1h", bars=[bar(BASE, 100.0, 104.0, False)])
+        line = PaperTrades().compute(ctx).lines[0]
+        assert line.time == get("1h").bucketer.start(BASE)
+
+    def test_it_reports_points_moved_and_net_separately(self, tmp_path):
+        """"How far has it gone" and "what is it worth" are different numbers,
+        and only the second one carries the cost."""
+        t = self._open_long(tmp_path, cost=0.75)
+        line = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 104.0, False)])).lines[0]
+        assert "+4.00 pts from entry" in line.detail
+        assert "+3.25 net" in line.detail
+
+    def test_the_currency_sign_precedes_the_symbol(self, tmp_path):
+        """'$-16.50' is what a bare +,.2f produces, and it reads as a typo."""
+        t = trader(tmp_path, cost=0.75)
+        t.update([bar(BASE, 100.0, 99.0, complete=False)], call("bullish"), BASE + 5)
+        line = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 90.0, False)])).lines[0]
+        assert "(-$" in line.detail and "$-" not in line.detail
+
+    def test_a_losing_position_is_toned_down(self, tmp_path):
+        t = self._open_long(tmp_path)
+        line = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 90.0, False)])).lines[0]
+        assert line.tone == "down"
+
+    def test_a_winning_position_is_toned_up(self, tmp_path):
+        t = self._open_long(tmp_path)
+        line = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 110.0, False)])).lines[0]
+        assert line.tone == "up"
+
+    def test_a_short_is_labelled_short(self, tmp_path):
+        t = trader(tmp_path)
+        t.update([bar(BASE, 100.0, 99.0, complete=False)], call("bearish"), BASE + 5)
+        line = PaperTrades().compute(self._ctx(t, bars=[bar(BASE, 100.0, 95.0, False)])).lines[0]
+        assert line.label.startswith("SHORT")
+        assert line.tone == "up"  # a short profits as price falls
+
+    def test_the_marker_survives_serialisation(self, tmp_path):
+        t = self._open_long(tmp_path)
+        payload = PaperTrades().compute(
+            self._ctx(t, bars=[bar(BASE, 100.0, 104.0, False)])
+        ).as_dict()
+        assert payload["lines"][0]["label"] == "LONG @ 100.00"
+        assert payload["lines"][0]["tone"] == "up"
+
+    def test_moved_and_unrealised_both_reach_the_panel(self, tmp_path):
+        t = self._open_long(tmp_path)
+        stats = {s.key: s.value for s in PaperTrades().compute(
+            self._ctx(t, bars=[bar(BASE, 100.0, 104.0, False)])).stats}
+        assert stats["paper_open_move"] == 4.0
+        assert stats["paper_open_pnl"] == 3.25

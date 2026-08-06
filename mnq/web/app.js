@@ -30,6 +30,9 @@ const state = {
   reconnectDelay: 1000,
   lastSnapshotAt: 0,
   needsFit: true,
+  /** Time-anchored markers from the last snapshot, and the div they draw into. */
+  lines: [],
+  lineLayer: null,
 };
 
 const el = (id) => document.getElementById(id);
@@ -120,6 +123,20 @@ function buildChart(config) {
     0
   );
   state.markers = createSeriesMarkers(state.candles, []);
+
+  // The chart library draws series and bar markers, but has no notion of a
+  // marker anchored to a *moment* spanning the pane. That is drawn as HTML on
+  // top of the canvas instead, positioned from the time scale.
+  state.lineLayer = document.createElement("div");
+  state.lineLayer.className = "vlines";
+  container.appendChild(state.lineLayer);
+  chart.timeScale().subscribeVisibleLogicalRangeChange(positionLines);
+  // autoSize resizes the canvas but cannot know about an overlay of ours, and
+  // a resize does not always change the logical range, so hook it directly.
+  if (!state.resizeHooked) {
+    state.resizeHooked = true;
+    window.addEventListener("resize", positionLines);
+  }
 
   let nextPane = 1;
   const paneHeights = [];
@@ -218,6 +235,7 @@ function applySnapshot(snap) {
   );
 
   const markers = [];
+  const lines = [];
   for (const [indicatorKey, result] of Object.entries(snap.indicators)) {
     for (const [seriesKey, points] of Object.entries(result.series || {})) {
       const entry = state.series.get(`${indicatorKey}.${seriesKey}`);
@@ -233,6 +251,7 @@ function applySnapshot(snap) {
         text: m.text,
       });
     }
+    for (const line of result.lines || []) lines.push(line);
   }
 
   // Series that got no data this snapshot must be cleared, or stale points
@@ -247,6 +266,7 @@ function applySnapshot(snap) {
 
   markers.sort((a, b) => a.time - b.time);
   state.markers.setMarkers(markers);
+  renderLines(lines);
 
   // Frame the recent action on first paint and on a timeframe switch, but
   // never afterwards — yanking the view back while someone is scrolling
@@ -260,6 +280,81 @@ function applySnapshot(snap) {
   renderOutlook(snap.outlook);
   renderMetrics(snap);
   renderStatus(snap.status);
+}
+
+/* --------------------------------------------------- time-anchored markers */
+
+/**
+ * Draw vertical markers over the price pane.
+ *
+ * Rebuilt only when the set actually changes, so scrolling the chart moves the
+ * existing nodes instead of tearing them down ten times a second. The text is
+ * updated in place on every snapshot, which is what keeps the live P&L ticking
+ * without the marker flickering.
+ */
+function renderLines(lines) {
+  if (!state.lineLayer) return;
+  const signature = lines.map((l) => `${l.time}:${l.style}:${l.color}`).join("|");
+
+  if (signature !== state.lineLayer.dataset.signature) {
+    state.lineLayer.dataset.signature = signature;
+    state.lineLayer.innerHTML = lines
+      .map(
+        (l) => `
+      <div class="vline" data-time="${l.time}" data-tone="${l.tone}">
+        <div class="vline-stem" style="border-color:${l.color};border-style:${l.style}"></div>
+        <div class="vline-badge" style="border-color:${l.color}">
+          <b></b><span></span>
+        </div>
+      </div>`
+      )
+      .join("");
+  }
+
+  const nodes = state.lineLayer.children;
+  for (let i = 0; i < lines.length; i += 1) {
+    const node = nodes[i];
+    if (!node) continue;
+    node.dataset.tone = lines[i].tone;
+    node.querySelector("b").textContent = lines[i].label;
+    node.querySelector("span").textContent = lines[i].detail;
+  }
+  state.lines = lines;
+  positionLines();
+}
+
+/**
+ * Put each marker where its timestamp falls on the current time scale.
+ *
+ * timeToCoordinate returns null when the time is outside the visible range, or
+ * when it is not a time the scale knows about; either way the marker is hidden
+ * rather than parked at the chart's left edge, where it would read as a
+ * position opened at a bar it has nothing to do with.
+ */
+function positionLines() {
+  if (!state.lineLayer || !state.chart) return;
+  const scale = state.chart.timeScale();
+  const width = el("chart").clientWidth;
+  const nodes = state.lineLayer.children;
+
+  for (let i = 0; i < nodes.length; i += 1) {
+    const node = nodes[i];
+    const time = Number(node.dataset.time);
+    let x = null;
+    try {
+      x = scale.timeToCoordinate(time);
+    } catch {
+      x = null;
+    }
+    if (x === null || x < 0 || x > width) {
+      node.style.display = "none";
+      continue;
+    }
+    node.style.display = "";
+    node.style.left = `${x}px`;
+    // Flip the badge to the left of the stem when it would overflow the pane.
+    node.classList.toggle("flip", x > width - 220);
+  }
 }
 
 function toPoint(p, spec) {

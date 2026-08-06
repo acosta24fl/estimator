@@ -313,3 +313,72 @@ body[data-outlook="bearish"] { box-shadow: inset 0 0 0 3px rgba(209, 73, 91, .55
 /* Confidence drives intensity, so a low-confidence call reads as tentative. */
 body[data-confidence="low"] .outlook { filter: saturate(.55) opacity(.9); }
 body[data-confidence="medium"] .outlook { filter: saturate(.85); }
+
+/* --------------------------------------------- time-anchored markers ---- */
+/* Drawn as HTML over the canvas: the chart library has series and bar
+   markers, but nothing anchored to a moment spanning the pane, which is how a
+   broker platform shows the candle a position opened on. */
+
+#chart { position: relative; }
+
+.vlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;   /* never steal the crosshair or a drag */
+  overflow: hidden;
+  z-index: 3;
+}
+
+.vline {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* `left` is set per-frame from the time scale; the stem straddles it. */
+  width: 0;
+}
+
+.vline-stem {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -1px;
+  border-left-width: 1px;
+  opacity: 0.75;
+}
+
+.vline-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 0;
+  padding: 4px 8px;
+  border: 1px solid;
+  border-radius: 5px;
+  background: rgba(14, 18, 27, 0.92);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+/* Near the right edge the badge would spill past the price scale. */
+.vline.flip .vline-badge {
+  left: auto;
+  right: 6px;
+}
+
+.vline-badge b {
+  display: block;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.vline-badge span {
+  display: block;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.vline[data-tone="up"] .vline-badge span { color: var(--up); }
+.vline[data-tone="down"] .vline-badge span { color: var(--down); }
