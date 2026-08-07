@@ -54,7 +54,7 @@ The second trap, which is worse
 ------------------------------
 "Filled because the bar's low touched my limit" assumes a single printed tick
 is a fill you could have had, in size, with your order already resting there.
-On real MNQ data that assumption *is the entire result*:
+On the synthetic feed that assumption *is the entire result*:
 
 ===============================  ==================  ====
 fill model (5m, depth 0.5 sigma)  per attempt         PF
@@ -62,6 +62,10 @@ fill model (5m, depth 0.5 sigma)  per attempt         PF
 low touched the limit             **+4.90 pts**       4.21
 a 1-minute bar *closed* through   **-1.10 pts**       0.71
 ===============================  ==================  ====
+
+(Those figures are from the offline generator. The *mechanism* is not
+specific to it — a fill assumption this load-bearing will dominate any
+series — but re-measure on your own history before quoting the numbers.)
 
 Same bars, same rule, opposite conclusion. And a train/test split does **not**
 catch it — both halves of the data agree, because the bias lives in the fill

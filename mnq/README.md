@@ -352,7 +352,8 @@ right-skewed and a normal band under-covers exactly in the tails that matter.
 
 "The high will be X" is a claim no model can keep. "The high stays below X
 about 80% of the time" is one that can be checked, and it is — walk-forward,
-fitting only on bars that had already closed. Measured on real MNQ:
+fitting only on bars that had already closed. Measured on the **synthetic
+feed** (see the caveat below):
 
 | claimed | high coverage | low coverage |
 | --- | --- | --- |
@@ -362,9 +363,10 @@ fitting only on bars that had already closed. Measured on real MNQ:
 | 90% | 90.0% | 90.9% |
 | 95% | 94.8% | 95.5% |
 
-Within a percentage point across the whole range. This is the part of the
-system that genuinely works, and it is what makes the envelope usable for
-sizing a stop rather than as decoration.
+Within a percentage point across the whole range. Coverage is a property of
+the method rather than of any one series, so it should transfer — but it has
+not been checked on real MNQ here. `python -m app.candles` on your own stored
+history prints the same table; that is the one to believe.
 
 The dashboard draws the two levels on whichever timeframe is on screen, with
 price labels on the axis so they can be read directly.
@@ -404,7 +406,7 @@ out of arithmetic gets caught.
 
 "Filled because the bar's low touched my limit" assumes a single printed tick
 is a fill you could have had, in size, with your order already resting there.
-On real MNQ that assumption **is the entire result**:
+On the synthetic feed that assumption **is the entire result**:
 
 | fill model (5m, depth 0.5 sigma) | per attempt | PF |
 | --- | --- | --- |
@@ -424,7 +426,7 @@ measurement rather than a guess. Both models are computed, always, printed side
 by side, and any depth where they disagree in sign is flagged
 `<- fill assumption`. The recommendation is scored on the conservative one.
 
-### What it actually says about MNQ
+### What it says on the synthetic feed
 
 Under honest fills, **no entry depth has positive expectancy on any timeframe** —
 waiting for a pullback is strictly worse than entering at the open, because
@@ -432,10 +434,81 @@ adverse selection exceeds the price improvement at every depth. The tool says
 so in those words, and points at the cause: entry placement cannot rescue a
 direction call with no edge, it can only change how fast the costs arrive.
 
+Run it on your own history before carrying any of these numbers over. Every
+figure in this section came from the offline generator, whose artificial
+autocorrelation makes its directional results meaningless for MNQ — see
+"Is it tradeable?" below.
+
 What remains useful is the excursion sizing. After entering at the open of a
 15-minute bar, price travels a median 18.1 points in your favour and 58.5
 points against at the 90th percentile — the honest shape of the trade, and the
 number to size a stop against.
+
+## Stops and targets
+
+```bash
+python -m app.stoptest --stop 5 --target 25     # one bracket
+python -m app.stoptest --sweep                  # a grid of both
+python -m app.stoptest --stop 5 --target 25 --tf 5m
+```
+
+Replays history, makes the same walk-forward calls the dashboard would have
+made, enters at the bar open, then holds to a stop or a target resolved
+**minute by minute** against the 1-minute series rather than guessed at from the
+parent bar's OHLC. Three conservatisms, each of which costs the simulation
+money: a stop and a target inside the same minute resolve as the **stop**; a
+minute that opens *beyond* a level fills at that open, not the level; an
+unresolved position is closed at the horizon and charged in full.
+
+### A bracket cannot create an edge
+
+For a driftless price the expectancy of any bracket is **exactly zero before
+costs**. By optional stopping, P(target first) = `stop / (stop + target)`, so
+
+```
+E = target * stop/(stop+target)  -  stop * target/(stop+target)  =  0
+```
+
+A 5-point stop with a 25-point target hits its target about **1 time in 6** and
+pays 5:1 — break-even by construction, and a loss after costs. So every run
+prints the break-even win rate and the driftless win rate first; a 1:5 bracket
+winning 17% of the time has found nothing. Two controls run alongside: the same
+signals with no bracket, and the same entries with randomised directions.
+
+### What a 5 / 25 bracket does
+
+On the synthetic feed, where the plain rule is strongly profitable (that feed
+has +0.28 lag-1 autocorrelation by construction — see "Is it tradeable?"), the
+bracket **destroys** it:
+
+| rule | trades | win | PF | per trade |
+| --- | --- | --- | --- | --- |
+| no stop, no target, held one bar | 803 | 55.0% | 1.34 | **+3.24 pts** |
+| stop 5 / target 25 | 803 | 9.8% | 0.46 | **−2.80 pts** |
+| stop 5 / target 25, random directions | 803 | 8.5% | 0.39 | −3.21 pts |
+
+724 of 803 trades stopped out, average hold **1.8 minutes**. And the whole grid
+is negative:
+
+```
+   stop \ target           10          15          25          40
+        3            -2.277      -2.181      -2.146      -2.245
+        5            -2.668      -2.612      -2.799      -2.994
+        8            -3.004      -2.814      -3.091      -3.102
+       12            -3.066      -2.941      -3.197      -3.307
+       20            -2.127      -2.413      -1.893      -1.302
+```
+
+The reason is in one number the run prints: average MFE **+14.2** / MAE **−13.8**
+points. Trades routinely swing ±14 points inside a 10-minute bar, so a 5-point
+stop sits well inside the noise — it is 0.14 of the bar's own sigma. It exits
+before the thing being predicted (where the bar *closes*) has happened, turning
+a directional bet into a bet on the path, and the path is noise. Widening the
+stop improves it monotonically, which is the same statement from the other side.
+
+Size a stop off measured excursion instead — `python -m app.candles` prints the
+90th-percentile adverse excursion per timeframe, which is what a stop has to
+clear to not be noise.
 
 ## The decision log
 
