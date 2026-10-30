@@ -34,3 +34,27 @@ All categories ≥ 8 → rendered `out/film.mp4`.
 **Next ideas (not yet done):** add a voiceover via Fish Audio; mask the
 TOTAL row in the breakdown screenshot until the roll-up lands; give the mess
 section a stronger collapse transition.
+
+---
+
+# Film 2: fast-materials ("Price it on the driveway"), 128 BPM, 20 s
+
+## Pass 1
+| Category | Score | Evidence |
+|---|---|---|
+| Brief fidelity | 9 | Every beat-sheet row lands on its bar; no stopwatch or time claim. |
+| Sync | 8 | Typing ticks on 16ths line up with characters; clicks land on the button frames. |
+| Brand | 9 | Cards rebuilt with the app's exact CSS; all numbers real (4.25×60 + 38×2 = $331; $1,360.87). |
+| Typography | 8 | Typed fields readable at 1080p. |
+| Composition | 8 | Materials card + subtotal balanced. |
+| Motion quality | 6 | Second material typed too late: $331 is visible for only ~0.1 s before the cut. |
+| Banned list | 10 | None. |
+| Sound | 8 | Peak −1 dBFS. |
+
+**Fix:** pulled row-2 typing forward (m2.sum 19.5 → 18.75), so $331 lands and holds before the whip-pan.
+
+## Pass 2
+Motion quality 8: subtotal lands $331 at 9.1 s and holds. Cursor hits Generate Estimate at 11.0 s.
+All categories ≥ 8 → rendered `out/fast-materials.mp4`.
+
+**Next ideas:** a vertical 9:16 cut for Reels/TikTok; a VO via Fish Audio; a different sample job (drywall, deck).

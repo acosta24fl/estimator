@@ -1,0 +1,56 @@
+{
+  "bpm": 128,
+  "beatsPerBar": 4,
+  "bars": 10,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "tailSeconds": 1.25,
+  "music": { "dropBeats": [7], "stopBeat": 38, "grooveFromBar": 0, "fullFromBar": 2, "arpUntilBar": 9, "padGain": 0.18 },
+  "events": [
+    { "id": "hook.in",        "beat": 0,    "sfx": "hit" },
+    { "id": "now.in",         "beat": 4,    "sfx": "hit" },
+    { "id": "now.flash",      "beat": 6,    "sfx": "tick" },
+    { "id": "riser",          "beat": 4,    "sfx": "riser", "lengthBeats": 4 },
+
+    { "id": "mat.in",         "beat": 8,    "sfx": "impact" },
+    { "id": "m1.name",        "beat": 8.5,  "sfx": "type", "lengthBeats": 2 },
+    { "id": "m1.cost",        "beat": 11,   "sfx": "type", "lengthBeats": 1 },
+    { "id": "m1.qty",         "beat": 13,   "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "m1.sum",         "beat": 14,   "sfx": "chime" },
+
+    { "id": "add.click",      "beat": 16,   "sfx": "click" },
+    { "id": "m2.name",        "beat": 16.25, "sfx": "type", "lengthBeats": 1.25 },
+    { "id": "m2.cost",        "beat": 17.75,"sfx": "type", "lengthBeats": 0.5 },
+    { "id": "m2.qty",         "beat": 18.25,"sfx": "type", "lengthBeats": 0.25 },
+    { "id": "m2.sum",         "beat": 18.75, "sfx": "chime" },
+
+    { "id": "labor.in",       "beat": 20,   "sfx": "whoosh" },
+    { "id": "labor.rate",     "beat": 21,   "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "labor.hours",    "beat": 22,   "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "tap.click",      "beat": 23.5, "sfx": "click" },
+
+    { "id": "tap.flash",      "beat": 24,   "sfx": "impact" },
+    { "id": "tap.rollStart",  "beat": 24.5, "sfx": "roll", "lengthBeats": 2.5 },
+    { "id": "tap.total",      "beat": 27,   "sfx": "chime" },
+
+    { "id": "tiers.budget",   "beat": 28,   "sfx": "hit" },
+    { "id": "tiers.standard", "beat": 29,   "sfx": "hit" },
+    { "id": "tiers.premium",  "beat": 30,   "sfx": "hit" },
+    { "id": "tiers.recommend","beat": 32,   "sfx": "chime" },
+    { "id": "tiers.caption",  "beat": 33,   "sfx": "tick" },
+
+    { "id": "end.in",         "beat": 36,   "sfx": "impact" },
+    { "id": "end.sub",        "beat": 37,   "sfx": "tick" },
+    { "id": "end.final",      "beat": 38,   "sfx": "hit" }
+  ],
+  "sections": [
+    { "id": "hook",   "fromBeat": 0,  "toBeat": 4 },
+    { "id": "now",    "fromBeat": 4,  "toBeat": 8 },
+    { "id": "mat",    "fromBeat": 8,  "toBeat": 20 },
+    { "id": "labor",  "fromBeat": 20, "toBeat": 24 },
+    { "id": "tap",    "fromBeat": 24, "toBeat": 28 },
+    { "id": "tiers",  "fromBeat": 28, "toBeat": 36 },
+    { "id": "end",    "fromBeat": 36, "toBeat": 40 }
+  ]
+}

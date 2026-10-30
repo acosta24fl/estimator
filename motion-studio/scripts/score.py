@@ -2,17 +2,23 @@
 
 Writes out/soundtrack.wav (48 kHz stereo). If audio/vo.wav exists it is mixed
 in and the music ducks under it (Rule 3).
-Usage: python3 scripts/score.py
+Usage: python3 scripts/score.py [beats.json] [out.wav]
 """
 import json
 import os
+import sys
 import wave
 
 import numpy as np
 
 SR = 48000
 STUDIO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-B = json.load(open(os.path.join(STUDIO, "beats.json")))
+BEATS_PATH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(STUDIO, "beats.json")
+OUT_PATH = sys.argv[2] if len(sys.argv) > 2 else os.path.join(STUDIO, "out", "soundtrack.wav")
+B = json.load(open(BEATS_PATH))
+# arrangement knobs (defaults = the launch film)
+M = {"dropBeats": [15], "stopBeat": 46, "grooveFromBar": 2, "fullFromBar": 4, "arpUntilBar": 11, "padGain": 0.22}
+M.update(B.get("music", {}))
 SPB = 60 / B["bpm"]
 TOTAL_BEATS = B["bars"] * B["beatsPerBar"]
 DUR = TOTAL_BEATS * SPB + B["tailSeconds"]
@@ -110,35 +116,38 @@ def midi(m):
 CHORDS = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]]
 ROOTS = [45, 41, 36, 43]
 
+STOP = M["stopBeat"]
 for bar in range(B["bars"]):
     t0 = bar * 4 * SPB
     ch = CHORDS[bar % 4]
-    section = bar // 2  # 0 open,1 mess,2 reveal(+product),...
-    place(music, pad([midi(m) for m in ch], 4 * SPB + 0.6), t0, 0.22 if bar < 10 else 0.3)
+    place(music, pad([midi(m) for m in ch], 4 * SPB + 0.6), t0, M["padGain"] if bar < B["bars"] - 2 else 0.3)
     for b in range(4):
         bt = t0 + b * SPB
         beat_no = bar * 4 + b
-        if beat_no < 15 or 16 <= beat_no < 46:
-            place(music, kick(), bt, 0.9 if bar >= 2 else 0.7)
-        if bar >= 2 and beat_no < 46 and beat_no not in (15,):
+        if beat_no >= STOP:
+            continue
+        groove = bar >= M["grooveFromBar"] and beat_no not in M["dropBeats"]
+        full = bar >= M["fullFromBar"]
+        if beat_no not in M["dropBeats"]:
+            place(music, kick(), bt, 0.9 if groove else 0.7)
+        if groove:
             place(music, hat(), bt + SPB / 2, 0.25)
-            if bar >= 4:
+            if full:
                 place(music, hat(), bt + SPB / 4, 0.1)
                 place(music, hat(), bt + 3 * SPB / 4, 0.1)
-        if bar >= 4 and b in (1, 3) and beat_no < 46:
-            place(music, clap(), bt, 0.35)
-        if bar >= 2 and beat_no < 46:
-            # sub bass on the off-8ths
+            # sub bass on the 8ths
             place(music, note(midi(ROOTS[bar % 4]), SPB / 2, "sine", 0.18), bt + SPB / 2, 0.45)
             place(music, note(midi(ROOTS[bar % 4]), SPB / 2, "sine", 0.18), bt, 0.3)
-    if bar >= 4 and bar < 11:
+        if full and b in (1, 3):
+            place(music, clap(), bt, 0.35)
+    if M["fullFromBar"] <= bar < M["arpUntilBar"]:
         # arpeggio on 16ths, low-passed
         arp = [m + 12 for m in ch] + [ch[0] + 24]
         seq = np.concatenate([note(midi(arp[k % 4]), SPB / 4, "saw", 0.08) for k in range(16)])
         place(music, lowpass(seq, 2600), t0, 0.06)
 
 # final chord ring-out
-place(music, pad([midi(m) for m in [45, 57, 60, 64, 69]], 3.0), 46 * SPB, 0.35)
+place(music, pad([midi(m) for m in [45, 57, 60, 64, 69]], 3.0), STOP * SPB, 0.35)
 
 
 # ---------- SFX ----------
@@ -205,11 +214,16 @@ def sfx_roll(beats):
     return out
 
 
-GAIN = {"hit": 0.55, "impact": 0.8, "tick": 0.25, "click": 0.4, "whoosh": 0.3, "riser": 0.35, "chime": 0.22, "roll": 0.3}
+GAIN = {"type": 0.18, "hit": 0.55, "impact": 0.8, "tick": 0.25, "click": 0.4, "whoosh": 0.3, "riser": 0.35, "chime": 0.22, "roll": 0.3}
 for e in B["events"]:
     kind, at = e["sfx"], e["beat"] * SPB
     if kind == "riser":
         sig = sfx_riser(e.get("lengthBeats", 4))
+    elif kind == "type":
+        n16 = int(e.get("lengthBeats", 1) * 4)
+        sig = np.zeros(int((n16 + 1) * SPB / 4 * SR))
+        for k in range(n16):
+            place(sig, sfx_tick() * (0.7 + 0.3 * (k % 2)), k * SPB / 4)
     elif kind == "roll":
         sig = sfx_roll(e.get("lengthBeats", 2))
     elif kind == "whoosh":
@@ -221,7 +235,8 @@ for e in B["events"]:
 
 # ---------- mix ----------
 mix = music * 0.8 + sfx
-vo_path = os.path.join(STUDIO, "audio", "vo.wav")
+# launch film: audio/vo.wav; other films: films/<slug>/vo.wav
+vo_path = os.path.join(os.path.dirname(BEATS_PATH), "vo.wav") if len(sys.argv) > 1 else os.path.join(STUDIO, "audio", "vo.wav")
 if os.path.exists(vo_path):
     with wave.open(vo_path) as w:
         raw = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(float) / 32768
@@ -243,10 +258,10 @@ mix *= 10 ** (-1 / 20) / np.max(np.abs(mix))  # peak -1 dBFS
 
 # subtle stereo width: music slightly delayed on the right
 stereo = np.stack([mix, np.roll(mix, 12) * 0.98 + mix * 0.02], axis=1)
-os.makedirs(os.path.join(STUDIO, "out"), exist_ok=True)
-with wave.open(os.path.join(STUDIO, "out", "soundtrack.wav"), "wb") as w:
+os.makedirs(os.path.dirname(OUT_PATH), exist_ok=True)
+with wave.open(OUT_PATH, "wb") as w:
     w.setnchannels(2)
     w.setsampwidth(2)
     w.setframerate(SR)
     w.writeframes((stereo * 32767).astype(np.int16).tobytes())
-print(f"Wrote out/soundtrack.wav ({DUR:.1f}s @ {B['bpm']} BPM, {len(B['events'])} cues)")
+print(f"Wrote {os.path.relpath(OUT_PATH, STUDIO)} ({DUR:.1f}s @ {B['bpm']} BPM, {len(B['events'])} cues)")

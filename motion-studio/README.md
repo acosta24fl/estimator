@@ -5,6 +5,12 @@ guide, director's brief, beat-synced sound, and a critique loop. The first
 film is a 25-second launch video for the Job Estimate Generator
 (`out/film.mp4`).
 
+Films so far: the launch film (`composition/` + `beats.json` → `out/film.mp4`) and
+`films/fast-materials/` → `out/fast-materials.mp4`. Each new film gets its own
+`films/<slug>/` folder with `index.html` + `beats.json`; render it with
+`node scripts/render.mjs --film <slug>` (also works with `--serve` and
+`bash scripts/critique.sh 0.5 <slug>`).
+
 ```
 motion-studio/
   MOTION_RULES.md          render contract, visual look, sound rules   (read first)

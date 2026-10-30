@@ -1,5 +1,5 @@
 node_modules/
-out/soundtrack.wav
+out/*.wav
 critique/frames/
 critique/contact-*.jpg
 references/frames/
