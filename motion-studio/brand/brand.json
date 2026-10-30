@@ -1,0 +1,32 @@
+{
+  "product": "Job Estimate Generator",
+  "shortName": "Estimator",
+  "tagline": "Know your number.",
+  "promise": "Calculate job estimates with materials, labor, travel, and profit margins",
+  "colors": {
+    "bg": "#0f1117",
+    "surface": "#1a1d27",
+    "surfaceDeep": "#12141c",
+    "border": "#2a2d3a",
+    "text": "#e0e0e0",
+    "textStrong": "#ffffff",
+    "textMuted": "#888888",
+    "accent": "#4a8cff",
+    "accentSoft": "#7eb8ff",
+    "accentDeep": "#2a5cbd",
+    "money": "#4aff8c",
+    "warn": "#ffaa4a",
+    "warnSoft": "#ffcc80",
+    "danger": "#ff4d4d"
+  },
+  "type": {
+    "display": "Inter Display, Inter, 'Segoe UI', sans-serif",
+    "body": "Inter, 'Segoe UI', sans-serif",
+    "numbers": "JetBrains Mono, ui-monospace, monospace"
+  },
+  "radius": { "card": 12, "control": 8 },
+  "assets": {
+    "icon": "brand/icon-512.png",
+    "screens": "brand/screens/"
+  }
+}

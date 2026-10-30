@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Estimator Launch Film</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --deep: #12141c; --border: #2a2d3a;
+    --text: #e0e0e0; --strong: #fff; --muted: #888; --accent: #4a8cff;
+    --accent-soft: #7eb8ff; --accent-deep: #2a5cbd; --money: #4aff8c;
+    --warn: #ffaa4a; --display: 'Inter Display', Inter, 'Segoe UI', sans-serif;
+    --body: Inter, 'Segoe UI', sans-serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--bg); color: var(--text); font-family: var(--body);
+    transform-origin: 0 0;
+  }
+  .scene { position: absolute; inset: 0; display: none; transform-origin: 50% 50%; }
+  .abs { position: absolute; }
+  .headline {
+    font-family: var(--display); font-weight: 800; letter-spacing: -0.035em;
+    color: var(--strong); line-height: 1.02; white-space: nowrap;
+  }
+  .sub { font-family: var(--body); font-weight: 500; color: var(--muted); font-size: 40px; letter-spacing: -0.01em; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .mask { overflow: hidden; padding-bottom: 0.12em; }
+  .mask > span { display: inline-block; }
+
+  /* Background grid for the opening */
+  .grid-bg {
+    position: absolute; inset: -10%;
+    background-image:
+      linear-gradient(#ffffff08 1px, transparent 1px),
+      linear-gradient(90deg, #ffffff08 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at 40% 50%, #000 20%, transparent 70%);
+  }
+
+  /* Cost chips */
+  .chip {
+    position: absolute; width: 440px; padding: 28px 32px; border-radius: 16px;
+    background: var(--surface); border: 1px solid var(--border);
+    box-shadow: 0 30px 60px -20px #000c;
+  }
+  .chip .label { font-size: 30px; font-weight: 600; color: var(--warn); letter-spacing: -0.01em; }
+  .chip .num { font-size: 56px; color: var(--strong); margin-top: 6px; }
+
+  /* Product */
+  .card {
+    position: absolute; border-radius: 14px; overflow: hidden;
+    border: 1px solid #ffffff14;
+    box-shadow: 0 60px 120px -30px #000, 0 0 0 1px #00000080;
+    background: var(--surface);
+  }
+  .card img { display: block; width: 100%; }
+  .cursor { position: absolute; width: 44px; height: 44px; filter: drop-shadow(0 6px 10px #000a); transform-origin: 6px 4px; }
+  .line-item { display: flex; justify-content: space-between; align-items: baseline; font-size: 40px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+  .line-item .l { color: var(--muted); font-weight: 500; }
+  .line-item .v { color: var(--strong); }
+
+  /* Tiers */
+  .tier {
+    position: absolute; top: 300px; width: 480px; height: 400px; border-radius: 18px;
+    background: var(--deep); border: 2px solid var(--border); text-align: center;
+    padding-top: 64px;
+  }
+  .tier h3 { font-size: 40px; font-weight: 700; color: #aaa; }
+  .tier .desc { font-size: 26px; color: #777; margin-top: 10px; }
+  .tier .price { font-size: 72px; font-weight: 700; color: var(--strong); margin-top: 34px; letter-spacing: -0.02em; }
+  .tier .tag {
+    position: absolute; top: -24px; left: 50%; transform: translateX(-50%);
+    background: var(--accent); color: #fff; font-weight: 700; font-size: 22px;
+    letter-spacing: 0.12em; padding: 10px 20px; border-radius: 8px;
+  }
+
+  /* Finishing */
+  #flash { position: absolute; inset: 0; background: var(--accent); pointer-events: none; opacity: 0; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at 50% 50%, transparent 55%, #000000a0 100%); }
+  #grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.06; mix-blend-mode: overlay; pointer-events: none; image-rendering: pixelated; }
+  #fadeout { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+
+  /* Preview controls (hidden when rendering) */
+  #controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center;
+    padding: 10px 16px; background: #000c; color: #ddd; font: 14px Inter, sans-serif; z-index: 10; }
+  #controls input[type=range] { flex: 1; }
+  #controls button { background: #4a8cff; color: #fff; border: 0; border-radius: 6px; padding: 6px 14px; font-weight: 600; cursor: pointer; }
+  body.render #controls { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 1. Cold open -->
+  <section class="scene" id="s-open">
+    <div class="grid-bg"></div>
+    <div class="abs mask" id="open1" style="left:160px; top:330px;">
+      <span class="headline" style="font-size:150px">You finished the job.</span>
+    </div>
+    <div class="abs mask" id="open2" style="left:160px; top:520px;">
+      <span class="headline" style="font-size:150px">Did you charge <span id="enough" style="position:relative">enough?<i id="enough-ul" style="position:absolute;left:0;bottom:-6px;height:10px;border-radius:5px;background:var(--warn);width:0"></i></span></span>
+    </div>
+  </section>
+
+  <!-- 2. The mess -->
+  <section class="scene" id="s-mess"></section>
+
+  <!-- 3. Reveal -->
+  <section class="scene" id="s-reveal">
+    <img id="reveal-icon" class="abs" src="../brand/icon-512.png" style="width:260px;height:260px;left:830px;top:300px;border-radius:56px;box-shadow:0 40px 80px -20px #000">
+    <div class="abs mask" id="reveal-name" style="left:0;right:0;top:610px;text-align:center">
+      <span class="headline" style="font-size:96px">Job Estimate Generator</span>
+    </div>
+  </section>
+
+  <!-- 4. Product -->
+  <section class="scene" id="s-product">
+    <div id="prod-cam" class="abs" style="inset:0; perspective:2000px">
+      <div id="prod-form" class="card" style="left:410px; top:250px; width:1100px; background:transparent; border:0; box-shadow:none; overflow:visible">
+        <div class="card" style="position:relative"><img src="../brand/screens/labor.png"></div>
+        <div id="gen-btn" style="position:relative; margin-top:28px; border-radius:12px; overflow:hidden; box-shadow:0 30px 60px -20px #4a8cff66">
+          <img src="../brand/screens/generate-button.png" style="display:block;width:100%">
+        </div>
+      </div>
+      <div id="prod-break" class="card" style="left:150px; top:225px; width:860px">
+        <img src="../brand/screens/breakdown.png">
+      </div>
+      <div id="wipe" class="abs" style="top:0; bottom:0; width:2200px; background:var(--accent); left:-2400px"></div>
+    </div>
+    <div id="prod-panel" class="abs" style="left:1130px; top:200px; width:640px">
+      <div class="sub" style="margin-bottom:18px; color:var(--accent-soft); font-weight:600">Every cost, counted.</div>
+      <div id="items"></div>
+      <div style="margin-top:40px">
+        <div class="sub" style="font-size:30px; letter-spacing:0.14em; font-weight:700">YOUR PRICE</div>
+        <div id="total" class="mono" style="font-size:120px; font-weight:700; color:var(--strong); letter-spacing:-0.03em">$0.00</div>
+      </div>
+    </div>
+    <svg id="cursor" class="cursor" viewBox="0 0 24 24"><path d="M3 2l7.5 19 2.6-7.9L21 10.5z" fill="#fff" stroke="#0f1117" stroke-width="1.4" stroke-linejoin="round"/></svg>
+  </section>
+
+  <!-- 5. Tiers -->
+  <section class="scene" id="s-tiers">
+    <div id="tiers"></div>
+    <div class="abs mask" id="tiers-caption" style="left:0;right:0;top:810px;text-align:center">
+      <span class="headline" style="font-size:72px">Three prices. <span style="color:var(--accent-soft)">Zero guesswork.</span></span>
+    </div>
+  </section>
+
+  <!-- 6. End card -->
+  <section class="scene" id="s-end">
+    <img id="end-icon" class="abs" src="../brand/icon-512.png" style="width:150px;height:150px;left:160px;top:300px;border-radius:34px">
+    <div class="abs mask" id="end-line" style="left:150px; top:480px">
+      <span class="headline" style="font-size:170px">Know your <span style="color:var(--money)">number.</span></span>
+    </div>
+    <div class="abs" id="end-sub" style="left:164px; top:700px">
+      <span class="sub" style="font-size:44px">Free <span style="color:#444">·</span> Works offline <span style="color:#444">·</span> On your phone</span>
+    </div>
+  </section>
+
+  <div id="flash"></div>
+  <div id="vignette"></div>
+  <canvas id="grain" width="480" height="270"></canvas>
+  <div id="fadeout"></div>
+</div>
+
+<div id="controls">
+  <button id="play">Play</button>
+  <input id="scrub" type="range" min="0" max="1" step="0.001" value="0">
+  <span id="clock" class="mono">0.00s</span>
+</div>
+
+<script>
+// ---------- helpers ----------
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const E = {
+  linear: p => p,
+  expoOut: p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p),
+  expoIn: p => p <= 0 ? 0 : Math.pow(2, 10 * p - 10),
+  expoInOut: p => p <= 0 ? 0 : p >= 1 ? 1 : p < .5 ? Math.pow(2, 20 * p - 10) / 2 : (2 - Math.pow(2, -20 * p + 10)) / 2,
+  backOut: (p, s = 1.35) => 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2),
+  sineInOut: p => -(Math.cos(Math.PI * p) - 1) / 2,
+};
+const $ = id => document.getElementById(id);
+const money = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const parseMoney = s => parseFloat(s.replace(/[$,]/g, ''));
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+let BEATS, EST, SPB, DURATION;
+const beat = n => n * SPB;
+// LEAD: visuals start ~3 frames early so the frame on the beat already shows the hit
+const LEAD = 0.1;
+const evExact = id => { const e = BEATS.events.find(e => e.id === id); if (!e) throw new Error('unknown event ' + id); return beat(e.beat); };
+const ev = id => evExact(id) - LEAD;
+// progress of an animation starting at time `start` lasting `beats` beats
+const P = (t, start, beats, ease = E.expoOut) => ease(clamp((t - start) / beat(beats)));
+
+// ---------- build data-driven DOM ----------
+function build() {
+  const row = label => EST.breakdown.find(r => r.label.startsWith(label)).value;
+  const costs = [
+    ['Materials', row('Materials')], ['Labor', row('Labor')], ['Gas', row('Travel')],
+    ['Overhead', row('Overhead')], ['Contingency', row('Contingency')], ['Taxes', row('Tax')],
+  ];
+  $('s-mess').innerHTML = costs.map(([l, v], i) => {
+    const x = 160 + (i % 3) * 560, y = 250 + Math.floor(i / 3) * 300;
+    return `<div class="chip" id="chip${i}" style="left:${x}px;top:${y}px"><div class="label">${l}</div><div class="num mono">${v}</div></div>`;
+  }).join('');
+
+  const items = [['Materials', row('Materials')], ['Labor', row('Labor')], ['Overhead', row('Overhead')], ['Profit', row('Profit')]];
+  $('items').innerHTML = items.map(([l, v], i) =>
+    `<div class="line-item" id="item${i}"><span class="l">${l}</span><span class="v mono">${v}</span></div>`).join('');
+
+  const names = [['Budget', 'Tight margins'], ['Standard', 'Fair, sustainable profit'], ['Premium', 'Rush & complex work']];
+  $('tiers').innerHTML = names.map(([n, d], i) =>
+    `<div class="tier" id="tier${i}" style="left:${180 + i * 540}px">
+       ${i === 1 ? '<div class="tag" id="rec-tag">RECOMMENDED</div>' : ''}
+       <h3>${n}</h3><div class="desc">${d}</div><div class="price mono">${EST.tiers[i]}</div></div>`).join('');
+}
+
+// ---------- scenes ----------
+const scenes = {
+  open(t, s0, s1) {
+    const l1 = P(t, ev('open.line1'), 1.5), l2 = P(t, ev('open.line2'), 1.5);
+    const dim = P(t, ev('open.line2'), 1);
+    $('open1').firstElementChild.style.transform = `translateY(${lerp(110, 0, l1)}%)`;
+    $('open1').style.transform = `translateY(${lerp(0, -40, dim)}px)`;
+    $('open1').firstElementChild.style.color = dim > 0 ? `rgb(${lerp(255, 85, dim)},${lerp(255, 88, dim)},${lerp(255, 100, dim)})` : '';
+    $('open2').firstElementChild.style.transform = `translateY(${lerp(110, 0, l2)}%)`;
+    const en = P(t, ev('open.enough'), 0.75);
+    $('enough').style.color = en > 0 ? 'var(--warn)' : '';
+    $('enough-ul').style.width = (en * 100) + '%';
+  },
+  mess(t) {
+    const col = P(t, ev('mess.collapse'), 2, E.expoIn);
+    for (let i = 0; i < 6; i++) {
+      const p = clamp((t - ev('mess.' + i)) / beat(0.6));
+      const s = p <= 0 ? 0 : E.backOut(p);
+      const rot = [-3, 2, -1.5, 2.5, -2, 1.5][i];
+      const el = $('chip' + i);
+      const cx = 160 + (i % 3) * 560 + 220, cy = 250 + Math.floor(i / 3) * 300 + 90;
+      const dx = (960 - cx) * col, dy = (540 - cy) * col;
+      el.style.opacity = clamp(p * 3) * (1 - col);
+      el.style.transform = `translate(${dx}px,${dy}px) scale(${lerp(0.7, 1, s) * (1 - col * 0.8)}) rotate(${rot * (1 - p) + rot * 0.3}deg)`;
+    }
+  },
+  reveal(t) {
+    const p = clamp((t - ev('reveal.flash')) / beat(1));
+    const s = p <= 0 ? 0 : E.backOut(p, 1.6);
+    $('reveal-icon').style.transform = `scale(${lerp(0.4, 1, s)})`;
+    $('reveal-icon').style.opacity = clamp(p * 4);
+    const n = P(t, ev('reveal.name'), 1.5);
+    $('reveal-name').firstElementChild.style.transform = `translateY(${lerp(110, 0, n)}%)`;
+  },
+  product(t, s0, s1) {
+    const enter = P(t, ev('product.in'), 2);
+    const push = E.sineInOut(clamp((t - s0) / (s1 - s0)));
+    const ry = lerp(14, 6, push), rx = lerp(6, 3, push);
+    const tilt = `rotateY(${ry}deg) rotateX(${rx}deg) translateZ(${lerp(-120, 0, enter)}px)`;
+    $('prod-form').style.transform = `translateY(${lerp(80, 0, enter)}px) rotateX(${lerp(10, 0, enter)}deg)`;
+    $('prod-form').style.opacity = clamp(enter * 2);
+    $('prod-break').style.transform = tilt;
+
+    // cursor: glides to the button, presses on the click beat
+    const click = evExact('product.click');
+    // aim at the button's real on-screen position, undoing stage + scene scale
+    const st = $('stage').getBoundingClientRect(), br = $('gen-btn').getBoundingClientRect();
+    const k = st.width / 1920, drift = lerp(1, 1.03, clamp((t - s0) / (s1 - s0)));
+    const btn = {
+      x: 960 + ((br.left + br.width * 0.62 - st.left) / k - 960) / drift,
+      y: 540 + ((br.top + br.height * 0.55 - st.top) / k - 540) / drift,
+    };
+    const mv = P(t, click - beat(1.5), 1.4, E.expoInOut);
+    const press = clamp(1 - Math.abs(t - click) / beat(0.25));
+    const cx = lerp(1500, btn.x, mv), cy = lerp(980, btn.y, mv);
+    const wipeT = ev('product.wipe');
+    const cursorOut = P(t, wipeT, 0.5);
+    $('cursor').style.transform = `translate(${cx + cursorOut * 900}px,${cy + cursorOut * 400}px) scale(${1 - 0.08 * press})`;
+    $('cursor').style.opacity = 1 - cursorOut;
+    $('gen-btn').style.transform = `scale(${1 - 0.04 * press})`;
+    $('gen-btn').style.filter = `brightness(${1 + 0.35 * press})`;
+
+    // accent wipe swaps form -> breakdown
+    const w = P(t, wipeT, 1, E.expoInOut);
+    $('wipe').style.transform = `translateX(${w * 4600}px) skewX(-12deg)`;
+    const swapped = t >= wipeT + beat(0.5);
+    $('prod-form').style.display = swapped ? 'none' : '';
+    $('prod-break').style.display = swapped ? '' : 'none';
+
+    // right panel rows + roll-up total
+    for (let i = 0; i < 4; i++) {
+      const p = P(t, ev('product.row' + i), 0.8);
+      const el = $('item' + i);
+      el.style.opacity = p; el.style.transform = `translateX(${lerp(40, 0, p)}px)`;
+    }
+    const target = parseMoney(EST.tiers[1]);
+    const rs = ev('product.rollStart'), re = evExact('product.total');
+    const r = clamp((t - rs) / (re - rs));
+    const v = t >= re ? target : target * E.expoOut(r) * (r > 0 ? 1 : 0);
+    $('total').textContent = money(Math.round(v * 100) / 100);
+    const land = clamp(1 - (t - re) / beat(1));
+    $('total').style.color = t >= re ? 'var(--money)' : 'var(--strong)';
+    $('total').style.transform = `scale(${t >= re ? 1 + 0.06 * land : 1})`;
+    $('total').style.transformOrigin = 'left center';
+    $('prod-panel').style.opacity = P(t, ev('product.row0') - beat(1), 1);
+  },
+  tiers(t) {
+    ['budget', 'standard', 'premium'].forEach((k, i) => {
+      const p = clamp((t - ev('tiers.' + k)) / beat(0.5));
+      const el = $('tier' + i);
+      el.style.opacity = clamp(p * 2.5);
+      el.style.transform = `translateY(${lerp(-40, 0, E.expoOut(p))}px) scale(${p <= 0 ? 1.3 : lerp(1.3, 1, E.backOut(p, 1.2))})`;
+    });
+    const rec = P(t, ev('tiers.recommend'), 1);
+    const st = $('tier1');
+    const p1 = clamp((t - ev('tiers.standard')) / beat(0.5));
+    st.style.transform = `translateY(${lerp(-40, 0, E.expoOut(p1))}px) scale(${(p1 <= 0 ? 1.3 : lerp(1.3, 1, E.backOut(p1, 1.2))) * lerp(1, 1.08, rec)})`;
+    st.style.borderColor = rec > 0 ? `rgba(74,140,255,${rec})` : '';
+    st.style.boxShadow = `0 0 ${80 * rec}px rgba(74,140,255,${0.35 * rec})`;
+    st.querySelector('.price').style.color = rec > 0.5 ? 'var(--money)' : '';
+    const tag = $('rec-tag');
+    tag.style.opacity = rec;
+    tag.style.transform = `translateX(-50%) scale(${rec <= 0 ? 0.6 : lerp(0.6, 1, E.backOut(rec))})`;
+    [0, 2].forEach(i => { $('tier' + i).style.filter = `brightness(${lerp(1, 0.6, rec)})`; });
+    const c = P(t, ev('tiers.caption'), 1.5);
+    $('tiers-caption').firstElementChild.style.transform = `translateY(${lerp(110, 0, c)}%)`;
+  },
+  end(t) {
+    const p = clamp((t - ev('end.in')) / beat(1));
+    $('end-icon').style.transform = `scale(${p <= 0 ? 0 : lerp(0.5, 1, E.backOut(p))})`;
+    $('end-icon').style.opacity = clamp(p * 4);
+    const l = P(t, ev('end.in'), 1.5);
+    $('end-line').firstElementChild.style.transform = `translateY(${lerp(110, 0, l)}%)`;
+    const s = P(t, ev('end.line2'), 1.5);
+    $('end-sub').style.opacity = s; $('end-sub').style.transform = `translateY(${lerp(30, 0, s)}px)`;
+    const f = clamp(1 - Math.abs(t - ev('end.final')) / beat(0.5));
+    $('s-end').style.filter = `brightness(${1 + 0.25 * f})`;
+  },
+};
+
+// ---------- global frame ----------
+const grainCtx = () => $('grain').getContext('2d');
+function drawGrain(frame) {
+  const ctx = grainCtx(), img = ctx.createImageData(480, 270), rnd = mulberry32(frame + 1);
+  for (let i = 0; i < img.data.length; i += 4) { const v = rnd() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  ctx.putImageData(img, 0, 0);
+}
+
+function seek(t) {
+  for (const sec of BEATS.sections) {
+    const s0 = beat(sec.fromBeat), s1 = beat(sec.toBeat);
+    const el = $('s-' + sec.id);
+    const last = sec === BEATS.sections[BEATS.sections.length - 1];
+    const on = t >= s0 && (t < s1 || (last && t <= DURATION));
+    el.style.display = on ? 'block' : 'none';
+    if (!on) continue;
+    // constant slow push-in on every shot
+    const drift = clamp((t - s0) / (s1 - s0));
+    el.style.transform = `scale(${lerp(1, 1.03, drift)})`;
+    scenes[sec.id](t, s0, s1);
+  }
+  // accent flash on the reveal
+  const f = clamp(1 - (t - evExact('reveal.flash')) / beat(0.6));
+  $('flash').style.opacity = t >= evExact('reveal.flash') ? E.expoIn(f) * 0.95 : 0;
+  // fade out over the tail
+  $('fadeout').style.opacity = clamp((t - beat(BEATS.bars * BEATS.beatsPerBar)) / BEATS.tailSeconds);
+  drawGrain(Math.round(t * BEATS.fps));
+}
+
+// ---------- boot ----------
+window.ready = (async () => {
+  BEATS = await (await fetch('../beats.json')).json();
+  EST = await (await fetch('../brand/sample-estimate.json')).json();
+  SPB = 60 / BEATS.bpm;
+  DURATION = beat(BEATS.bars * BEATS.beatsPerBar) + BEATS.tailSeconds;
+  build();
+  await Promise.all(['800 100px "Inter Display"', '500 40px Inter', '700 40px "JetBrains Mono"'].map(f => document.fonts.load(f)));
+  await Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+  window.seek = seek; window.DURATION = DURATION;
+  seek(0);
+  return { duration: DURATION, fps: BEATS.fps };
+})();
+
+// ---------- preview mode ----------
+if (new URLSearchParams(location.search).has('render')) document.body.classList.add('render');
+else window.ready.then(() => {
+  const fit = () => { const s = Math.min(innerWidth / 1920, (innerHeight - 50) / 1080); $('stage').style.transform = `scale(${s})`; };
+  fit(); addEventListener('resize', fit);
+  const audio = new Audio('../out/soundtrack.wav');
+  let playing = false;
+  const tick = () => { if (!playing) return; seek(audio.currentTime); $('scrub').value = audio.currentTime / DURATION; $('clock').textContent = audio.currentTime.toFixed(2) + 's'; if (audio.ended) { playing = false; $('play').textContent = 'Play'; } requestAnimationFrame(tick); };
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; if (playing) { audio.play(); tick(); } else audio.pause(); };
+  $('scrub').oninput = e => { audio.currentTime = e.target.value * DURATION; seek(audio.currentTime); $('clock').textContent = audio.currentTime.toFixed(2) + 's'; };
+});
+</script>
+</body>
+</html>

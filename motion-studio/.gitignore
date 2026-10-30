@@ -1,0 +1,7 @@
+node_modules/
+out/soundtrack.wav
+critique/frames/
+critique/contact-*.jpg
+references/frames/
+references/*.mp4
+audio/*.wav

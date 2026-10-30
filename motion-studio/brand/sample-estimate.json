@@ -1,0 +1,53 @@
+{
+  "tiers": [
+    "$1,156.74",
+    "$1,360.87",
+    "$1,633.04"
+  ],
+  "breakdown": [
+    {
+      "label": "Materials",
+      "value": "$331.00"
+    },
+    {
+      "label": "Labor (10h x $45.00 x 1 skill x 1 worker)",
+      "value": "$450.00"
+    },
+    {
+      "label": "Travel (34 mi x $0.67/mi)",
+      "value": "$22.78"
+    },
+    {
+      "label": "Food / Meals",
+      "value": "$18.00"
+    },
+    {
+      "label": "Other Expenses",
+      "value": "$0.00"
+    },
+    {
+      "label": "Direct Costs Subtotal",
+      "value": "$821.78"
+    },
+    {
+      "label": "Overhead (10%)",
+      "value": "$82.18"
+    },
+    {
+      "label": "Contingency Buffer (10%)",
+      "value": "$82.18"
+    },
+    {
+      "label": "Profit Margin (20%)",
+      "value": "$197.23"
+    },
+    {
+      "label": "Tax Set-Aside (15%)",
+      "value": "$177.50"
+    },
+    {
+      "label": "TOTAL ESTIMATE",
+      "value": "$1,360.87"
+    }
+  ]
+}

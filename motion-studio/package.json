@@ -1,0 +1,14 @@
+{
+  "name": "estimator-motion-studio",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "brand": "node scripts/capture-brand.mjs",
+    "audio": "python3 scripts/score.py",
+    "render": "node scripts/render.mjs",
+    "critique": "bash scripts/critique.sh"
+  },
+  "dependencies": {
+    "playwright": "^1.48.0"
+  }
+}
