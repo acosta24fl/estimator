@@ -1,0 +1,97 @@
+{
+  "title": "Level",
+  "premise": "Maria spent a weekend hanging her own kitchen cabinets. They look almost right: one sags, the doors don't line up, and the level never settles. She calls Daniel, an installer who works in silence and checks everything twice. With her helping, he resets every cabinet to a laser line, anchors it to the studs, shims it square, and dials each hinge until every gap matches. The film ends on one soft-closing door.",
+  "logline": "A homeowner whose DIY cabinets are almost right learns, alongside a meticulous installer, what right actually looks like.",
+  "era": {
+    "timeline": [
+      "Maria buys white shaker cabinets for her 1990s kitchen.",
+      "She hangs the uppers herself over a weekend.",
+      "Monday morning the doors already sag out of line.",
+      "Tuesday she books a professional installer; the film is that visit."
+    ],
+    "era_rules": [
+      "Present day, suburban United States.",
+      "Real tools only: cross-line laser level, cordless drill, spirit level, wood shims, F-clamps, screwdriver.",
+      "No brand logos visible on any tool or cabinet."
+    ]
+  },
+  "factions": [
+    {
+      "name": "DIY homeowners",
+      "goal": "save money and do it themselves",
+      "power_over": "they decide whether a pro is worth paying for"
+    },
+    {
+      "name": "Professional installers",
+      "goal": "be trusted with the whole kitchen",
+      "power_over": "skill and patience a weekend can't buy"
+    }
+  ],
+  "world_rules": [
+    "Every quality claim is shown physically: a laser line, a bubble, a measured gap.",
+    "No price, time or guarantee claims are spoken or shown.",
+    "The installer never mocks the homeowner's attempt; he includes her in the work."
+  ],
+  "locations": [
+    {
+      "loc_id": "@Kitchen",
+      "name": "Maria's kitchen",
+      "visual_motifs": [
+        "white shaker uppers with brushed-brass bar pulls",
+        "glossy white subway tile",
+        "morning window light raking across the wall"
+      ],
+      "color_palette": [
+        "#d3cabd greige wall",
+        "#f4f2ee cabinet white",
+        "#c9a86a brass",
+        "#f7f5f1 quartz"
+      ],
+      "architecture": "1990s suburban galley kitchen remodeled: white quartz counter, subway backsplash, oak floor, window on the left wall."
+    },
+    {
+      "loc_id": "@Entry",
+      "name": "Front entry",
+      "visual_motifs": [
+        "dark oak front door",
+        "bright daylight beyond the threshold"
+      ],
+      "color_palette": [
+        "#6b4a2e oak",
+        "#fff3dc daylight",
+        "#d3cabd greige"
+      ],
+      "architecture": "Narrow entry hall, painted trim, oak plank floor."
+    }
+  ],
+  "characters": [
+    {
+      "char_id": "@Installer",
+      "name": "Daniel Reyes",
+      "age": 46,
+      "archetype": "The patient master",
+      "flaw": "Says so little that clients sometimes think he's unfriendly.",
+      "want": "To leave every kitchen better than the drawings.",
+      "vocal_cadence": "Low, warm, few words; finishes sentences with a small nod.",
+      "behavioral_ticks": [
+        "sights down every edge with one eye closed",
+        "taps a cabinet twice after it's fastened",
+        "keeps a pencil behind his ear"
+      ]
+    },
+    {
+      "char_id": "@Homeowner",
+      "name": "Maria Chen",
+      "age": 39,
+      "archetype": "The capable perfectionist",
+      "flaw": "Hates admitting a job beat her.",
+      "want": "A kitchen she doesn't have to apologize for.",
+      "vocal_cadence": "Quick, wry, self-deprecating; laughs at her own mistakes.",
+      "behavioral_ticks": [
+        "tucks hair behind her ear when thinking",
+        "runs her fingertips along edges",
+        "steps back with arms crossed to judge"
+      ]
+    }
+  ]
+}

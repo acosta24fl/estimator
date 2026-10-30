@@ -1,0 +1,343 @@
+{
+  "shots": [
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH010",
+        "duration_s": 4.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7101,
+      "slot_03_asset_bindings": [
+        "@Homeowner",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 2.4,
+          "end_sec": 3.7,
+          "active_speaker_id": "@Homeowner",
+          "spoken_line": "Close enough... right?",
+          "silent_listeners_state": "none on screen"
+        }
+      ],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Medium-wide; one upper cabinet visibly tilted, @Homeowner at frame left facing it.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T2.8, focus on the tilted cabinet.",
+      "slot_06_camera_rig_motion": "Slow Steadicam push-in, roughly 30 cm.",
+      "slot_07_geometry_spatial_matte": "Locked to @Kitchen_Plate; the single DIY upper hangs 2 degrees out of level, right door sagging lower than the left.",
+      "slot_08_character_blocking": "@Homeowner stands two steps back, three-quarter to camera, weight on one hip.",
+      "slot_09_wardrobe_lock": "@Homeowner: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: window sun 5600K from frame left; fill: bounce off the counter; ratio 3:1.",
+      "slot_11_atmosphere_volumetrics": "Dust drifting through the sunbeam.",
+      "slot_12_timecoded_action_beats": [
+        "[0-2s] She tilts her head to match the cabinet.",
+        "[2-4s] She crosses her arms and sighs."
+      ],
+      "slot_13_facial_micro_expressions": "Narrowed eyes, one corner of the mouth pulled in, a self-mocking half-laugh.",
+      "slot_15_physics_interaction_sim": "Sweater sleeves bunch at the elbows as she folds her arms."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH020",
+        "duration_s": 3.5,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7102,
+      "slot_03_asset_bindings": [
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Extreme close-up of a spirit level resting on the cabinet top, vial centered.",
+      "slot_05_camera_optics": "100mm macro, T4, razor-thin focus on the vial.",
+      "slot_06_camera_rig_motion": "Locked off, imperceptible drift.",
+      "slot_07_geometry_spatial_matte": "Aluminium level fills the frame width; wall behind falls to soft bokeh.",
+      "slot_08_character_blocking": "No characters.",
+      "slot_09_wardrobe_lock": "None.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K skimming the aluminium; ratio 4:1.",
+      "slot_11_atmosphere_volumetrics": "Faint haze softening highlights.",
+      "slot_12_timecoded_action_beats": [
+        "[0-3.5s] The bubble wobbles and settles well off center, past the right line."
+      ],
+      "slot_13_facial_micro_expressions": "None.",
+      "slot_15_physics_interaction_sim": "Liquid in the vial sloshes then stills; the bubble stretches slightly as it moves."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH030",
+        "duration_s": 3.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7103,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Entry_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 1.3,
+          "end_sec": 2.6,
+          "active_speaker_id": "@Installer",
+          "spoken_line": "Morning. Let's take a look.",
+          "silent_listeners_state": "none on screen"
+        }
+      ],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Medium shot down the hall; door opens to reveal @Installer framed by the doorway.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T4, exposed for the interior so the doorway blooms.",
+      "slot_06_camera_rig_motion": "Locked tripod.",
+      "slot_07_geometry_spatial_matte": "Locked to @Entry_Plate; doorway centered, hall planks leading in.",
+      "slot_08_character_blocking": "@Installer on the threshold, square to camera, tool bag in his left hand.",
+      "slot_09_wardrobe_lock": "@Installer: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Backlight: daylight 6000K through the doorway; fill: hall sconce 2700K; ratio 6:1 silhouette-leaning.",
+      "slot_11_atmosphere_volumetrics": "Light haze catching the incoming daylight.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1s] Door swings inward.",
+        "[1-3s] He nods once and steps inside."
+      ],
+      "slot_13_facial_micro_expressions": "Calm, a small closed-mouth smile.",
+      "slot_15_physics_interaction_sim": "Door momentum slows naturally against the hinge; air moves the hanging scarf."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH040",
+        "duration_s": 5.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7104,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Wide on the bare back wall (DIY cabinets removed), @Installer at frame right.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T2.8, deep enough to hold the laser line sharp.",
+      "slot_06_camera_rig_motion": "Slow lateral slider move left to right.",
+      "slot_07_geometry_spatial_matte": "Back wall emptied of uppers, screw holes patched; tripod-mounted cross-line laser at frame left.",
+      "slot_08_character_blocking": "@Installer walks along the wall, pencil raised to the green line.",
+      "slot_09_wardrobe_lock": "@Installer: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Room dimmed so the green laser reads; window 5600K low from the left; ratio 5:1.",
+      "slot_11_atmosphere_volumetrics": "Laser catches floating dust as a faint green sheet.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1s] Laser clicks on; a level green line snaps across the wall.",
+        "[1-5s] He marks four stud locations on the line with short pencil ticks."
+      ],
+      "slot_13_facial_micro_expressions": "One eye closed as he sights down the line; jaw set.",
+      "slot_15_physics_interaction_sim": "Pencil graphite drags slightly on the painted wall."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH050",
+        "duration_s": 3.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7105,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Extreme close-up: cabinet hanging rail, screw head center frame.",
+      "slot_05_camera_optics": "100mm macro, T5.6, focus on the screw head.",
+      "slot_06_camera_rig_motion": "Locked off.",
+      "slot_07_geometry_spatial_matte": "Maple hanging rail fills the lower two thirds; wall soft behind.",
+      "slot_08_character_blocking": "Only @Installer's hand and the drill enter from frame right.",
+      "slot_09_wardrobe_lock": "@Installer: castkit wardrobe_default, rolled sleeve visible at the wrist.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K raking from the left to show wood texture; ratio 3:1.",
+      "slot_11_atmosphere_volumetrics": "None beyond the sawdust.",
+      "slot_12_timecoded_action_beats": [
+        "[0-2s] Drill drives the screw; sawdust curls out.",
+        "[2-3s] Screw head seats flush; drill pulls away."
+      ],
+      "slot_13_facial_micro_expressions": "None; face out of frame.",
+      "slot_15_physics_interaction_sim": "Sawdust ejects in a spiral and falls with gravity; the clutch clicks as the screw seats."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH060",
+        "duration_s": 3.5,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7106,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Homeowner",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 0.3,
+          "end_sec": 1.2,
+          "active_speaker_id": "@Homeowner",
+          "spoken_line": "Like this?",
+          "silent_listeners_state": "@Installer mouth closed, nodding"
+        },
+        {
+          "start_sec": 1.6,
+          "end_sec": 2.9,
+          "active_speaker_id": "@Installer",
+          "spoken_line": "Perfect. Hold it right there.",
+          "silent_listeners_state": "@Homeowner mouth closed, holding still"
+        }
+      ],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Medium two-shot from behind and slightly left; a new upper cabinet being set.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T2.8, both figures in focus.",
+      "slot_06_camera_rig_motion": "Locked tripod.",
+      "slot_07_geometry_spatial_matte": "New white shaker upper held against the green laser line; first cabinet already hung at left.",
+      "slot_08_character_blocking": "@Homeowner braces the cabinet face with both palms; @Installer on a step stool fastens the top corner.",
+      "slot_09_wardrobe_lock": "@Homeowner: castkit wardrobe_default. @Installer: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K from frame left; fill: soft bounce; ratio 3:1.",
+      "slot_11_atmosphere_volumetrics": "Dust in the window beam behind them.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1.5s] She asks, steadying the box.",
+        "[1.5-3.5s] He answers and drives the first screw."
+      ],
+      "slot_13_facial_micro_expressions": "@Homeowner: concentration, lip bitten. @Installer: relaxed, encouraging glance down at her.",
+      "slot_15_physics_interaction_sim": "Cabinet weight shifts slightly into her palms; drill torque twists his wrist."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH070",
+        "duration_s": 4.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7107,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Close-up on the cabinet underside: spirit level in the top half, a wood shim entering at bottom left.",
+      "slot_05_camera_optics": "85mm Cooke Panchro, T2.8, focus pulls from shim to vial.",
+      "slot_06_camera_rig_motion": "Locked off with a focus pull at 1.5 s.",
+      "slot_07_geometry_spatial_matte": "Underside of the upper as a horizontal band; wall behind out of focus.",
+      "slot_08_character_blocking": "@Installer's fingertips tap the shim in; rest of him out of frame.",
+      "slot_09_wardrobe_lock": "@Installer: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K from the left; ratio 3:1.",
+      "slot_11_atmosphere_volumetrics": "Slight haze.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1.5s] Shim slides in with two taps.",
+        "[1.5-4s] The bubble drifts and stops dead between the lines."
+      ],
+      "slot_13_facial_micro_expressions": "None.",
+      "slot_15_physics_interaction_sim": "Shim flexes slightly as it wedges; vial liquid damps to rest."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH080",
+        "duration_s": 3.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7108,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Close-up on a pair of upper doors, center gap in the middle third.",
+      "slot_05_camera_optics": "50mm Cooke Panchro, T2.8.",
+      "slot_06_camera_rig_motion": "Slow push of about 5 cm.",
+      "slot_07_geometry_spatial_matte": "Two shaker doors filling the frame; left door open toward camera showing a concealed hinge.",
+      "slot_08_character_blocking": "@Installer's hand turns the hinge adjustment screw, then closes the door.",
+      "slot_09_wardrobe_lock": "@Installer: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K skimming the door faces to reveal the gap; ratio 2:1.",
+      "slot_11_atmosphere_volumetrics": "Clean, minimal haze.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1.5s] Quarter turn of the hinge screw.",
+        "[1.5-3s] Door swings closed; both gaps read identical."
+      ],
+      "slot_13_facial_micro_expressions": "None.",
+      "slot_15_physics_interaction_sim": "Door settles against the bumpers without bounce."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH090",
+        "duration_s": 5.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7109,
+      "slot_03_asset_bindings": [
+        "@Installer",
+        "@Homeowner",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 2.6,
+          "end_sec": 4.2,
+          "active_speaker_id": "@Homeowner",
+          "spoken_line": "Okay. Now it's right.",
+          "silent_listeners_state": "@Installer mouth closed, nodding"
+        }
+      ],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Wide reveal of the finished run; both of them small at frame left, backs to camera.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T4, everything sharp.",
+      "slot_06_camera_rig_motion": "Slow dolly back of 50 cm.",
+      "slot_07_geometry_spatial_matte": "Full upper run perfectly level over the counter; under-cabinet strip on the underside.",
+      "slot_08_character_blocking": "@Homeowner steps forward; @Installer stays a pace behind her.",
+      "slot_09_wardrobe_lock": "@Homeowner: castkit wardrobe_default. @Installer: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Window 5600K plus under-cabinet LEDs switching on at 2700K, pooling on the quartz; ratio 2:1.",
+      "slot_11_atmosphere_volumetrics": "Warm glow halates on the counter.",
+      "slot_12_timecoded_action_beats": [
+        "[0-2s] Under-cabinet lights click on one by one.",
+        "[2-5s] She turns back to him, delighted."
+      ],
+      "slot_13_facial_micro_expressions": "@Homeowner: eyebrows up, open smile. @Installer: small nod.",
+      "slot_15_physics_interaction_sim": "Her hair swings as she turns."
+    },
+    {
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH100",
+        "duration_s": 3.0,
+        "fps": 24
+      },
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "seed": 7110,
+      "slot_03_asset_bindings": [
+        "@Homeowner",
+        "@Kitchen_Plate"
+      ],
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_04_shot_scale_framing": "Extreme close-up: door edge and brass pull, fingertip entering frame right.",
+      "slot_05_camera_optics": "85mm Cooke Panchro, T2.0.",
+      "slot_06_camera_rig_motion": "Locked off.",
+      "slot_07_geometry_spatial_matte": "Door face fills the frame; the cabinet interior dark beyond the opening.",
+      "slot_08_character_blocking": "@Homeowner's index finger gives the open door one light push.",
+      "slot_09_wardrobe_lock": "@Homeowner: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K; fill: LED warmth from below; ratio 2:1.",
+      "slot_11_atmosphere_volumetrics": "Soft halation on the pull.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1s] Fingertip pushes the door.",
+        "[1-3s] Door glides, slows on the damper, and closes silently."
+      ],
+      "slot_13_facial_micro_expressions": "None.",
+      "slot_15_physics_interaction_sim": "Soft-close damper decelerates the last 10 degrees smoothly."
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "plates": [
+    {
+      "plate_id": "@Kitchen_Plate",
+      "location_ref": "@Kitchen",
+      "clean_plate_geometry": "Empty remodeled galley kitchen, wall-on. Back wall: greige paint above glossy white subway tile, white quartz counter at 36 in, white shaker lowers with brushed-brass bar pulls. Upper cabinet run on the back wall. Left wall: double-hung window with morning light. Foreground right: counter edge with a ceramic fruit bowl. Camera at 52 in height, 10 degrees off square to the back wall.",
+      "focal_length_mm": 35,
+      "lens_type": "Cooke Panchro (spherical)",
+      "aperture": "f/2.8",
+      "shutter_angle_deg": 180,
+      "color_temp_k": 5000,
+      "practical_lights": [
+        "morning sun through the left window, 5600K",
+        "warm under-cabinet LED strip, 2700K (off until the reveal)"
+      ],
+      "atmospheric_depth": "soft aerial perspective toward the window, micro-dust particulates floating in the sunbeam, gentle halation on the brass, fine 35mm film grain"
+    },
+    {
+      "plate_id": "@Entry_Plate",
+      "location_ref": "@Entry",
+      "clean_plate_geometry": "Empty narrow entry hall seen from inside. Center: closed dark oak front door with a brass knob in white painted trim. Floor: oak planks running toward the door. Left: a coat hook with a scarf. Camera at 55 in height, square to the door.",
+      "focal_length_mm": 35,
+      "lens_type": "Cooke Panchro (spherical)",
+      "aperture": "f/4",
+      "shutter_angle_deg": 180,
+      "color_temp_k": 4500,
+      "practical_lights": [
+        "daylight around the door edges, 6000K",
+        "warm hall sconce, 2700K"
+      ],
+      "atmospheric_depth": "light haze where the daylight will enter, subtle aerial perspective down the hall, fine film grain"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "characters": [
+    {
+      "char_id": "@Installer",
+      "craniofacial_lock": "Long oval face with a strong straight jaw, short salt-and-pepper beard trimmed close, cropped dark brown hair with grey at the temples, olive-tan skin with fine sun lines at the outer eyes, dark brown deep-set eyes, heavy straight brows, slightly crooked nose from an old break, small scar on the chin, apparent age 46.",
+      "body_lock": "6 ft 0 in, lean and strong, long forearms, relaxed upright posture, moves slowly and deliberately.",
+      "wardrobe_default": "faded olive canvas work shirt with sleeves rolled to the forearm, charcoal duck-canvas work pants with a tape measure clipped at the hip, worn tan leather work boots, flat carpenter pencil behind the right ear",
+      "wardrobe_layers": [],
+      "reference_image_paths": []
+    },
+    {
+      "char_id": "@Homeowner",
+      "craniofacial_lock": "Heart-shaped face, shoulder-length straight black hair often tucked behind the left ear, warm light-tan skin with a few freckles across the nose, dark brown almond eyes, softly arched brows, small straight nose, full lower lip, apparent age 39.",
+      "body_lock": "5 ft 5 in, slim athletic build, light on her feet, stands with weight on one hip when judging something.",
+      "wardrobe_default": "cream cable-knit sweater with pushed-up sleeves, high-waisted mid-blue jeans, white canvas sneakers, thin gold hoop earrings",
+      "wardrobe_layers": [],
+      "reference_image_paths": []
+    }
+  ]
+}

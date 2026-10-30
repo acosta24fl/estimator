@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Cabinet Install Promo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  #stage { position: relative; width: 1920px; height: 1080px; overflow: hidden; background: #000; transform-origin: 0 0; }
+  canvas { display: block; }
+  #controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 10px 16px;
+    background: #000c; color: #ddd; font: 14px Inter, sans-serif; z-index: 10; }
+  #controls input[type=range] { flex: 1; }
+  #controls button { background: #c9a86a; color: #111; border: 0; border-radius: 6px; padding: 6px 14px; font-weight: 600; cursor: pointer; }
+  body.render #controls { display: none; }
+</style>
+</head>
+<body>
+<div id="stage"><canvas id="c" width="1920" height="1080"></canvas></div>
+<div id="controls"><button id="play">Play</button><input id="scrub" type="range" min="0" max="1" step="0.001" value="0"><span id="clock">0.00s</span></div>
+<script>
+// Optional business details for the end card. Leave empty to hide the line.
+const BRAND = { name: '', phone: '', web: '' };
+
+const W = 1920, H = 1080;
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const E = {
+  expoOut: p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p),
+  expoIn: p => p <= 0 ? 0 : Math.pow(2, 10 * p - 10),
+  expoInOut: p => p <= 0 ? 0 : p >= 1 ? 1 : p < .5 ? Math.pow(2, 20 * p - 10) / 2 : (2 - Math.pow(2, -20 * p + 10)) / 2,
+  sineInOut: p => -(Math.cos(Math.PI * p) - 1) / 2,
+  cubicOut: p => 1 - Math.pow(1 - p, 3),
+  backOut: (p, s = 1.3) => 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2),
+};
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+let BEATS, SPB, DURATION;
+const beat = n => n * SPB;
+const LEAD = 0.1;
+const evExact = id => { const e = BEATS.events.find(e => e.id === id); if (!e) throw new Error('unknown event ' + id); return beat(e.beat); };
+const ev = id => evExact(id) - LEAD;
+const P = (t, start, beats, ease = E.expoOut) => ease(clamp((t - start) / beat(beats)));
+
+// ------------------------------------------------------------------ drawing helpers
+const BRASS = ['#8f6f3a', '#d9bb7c', '#f3e2b4', '#b8935a'];
+function rr(c, x, y, w, h, r) { c.beginPath(); c.roundRect(x, y, w, h, r); }
+function lin(c, x0, y0, x1, y1, stops) { const g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; }
+function rad(c, x, y, r0, r1, stops) { const g = c.createRadialGradient(x, y, r0, x, y, r1); stops.forEach(([o, col]) => g.addColorStop(o, col)); return g; }
+function canvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function shadow(c, blur, ox, oy, col) { c.shadowBlur = blur; c.shadowOffsetX = ox; c.shadowOffsetY = oy; c.shadowColor = col; }
+function noShadow(c) { c.shadowBlur = 0; c.shadowOffsetX = 0; c.shadowOffsetY = 0; c.shadowColor = 'transparent'; }
+
+// ------------------------------------------------------------------ procedural textures (built once, seeded)
+const TX = {};
+function buildTextures() {
+  // painted drywall: warm greige, low-frequency mottling + fine tooth
+  const wall = canvas(W, H), w = wall.getContext('2d');
+  w.fillStyle = '#d3cabd'; w.fillRect(0, 0, W, H);
+  const mott = canvas(48, 27), m = mott.getContext('2d'), r1 = mulberry32(3), md = m.createImageData(48, 27);
+  for (let i = 0; i < md.data.length; i += 4) { const v = 200 + r1() * 40; md.data[i] = v; md.data[i + 1] = v - 6; md.data[i + 2] = v - 16; md.data[i + 3] = 40; }
+  m.putImageData(md, 0, 0); w.imageSmoothingQuality = 'high'; w.drawImage(mott, 0, 0, W, H);
+  const fine = w.getImageData(0, 0, W, H), r2 = mulberry32(5);
+  for (let i = 0; i < fine.data.length; i += 4) { const n = (r2() - 0.5) * 9; fine.data[i] += n; fine.data[i + 1] += n; fine.data[i + 2] += n; }
+  w.putImageData(fine, 0, 0);
+  TX.wall = wall;
+
+  // wood grain strip (oak), tiles into floor / framing / end card
+  const wood = canvas(1024, 256), wd = wood.getContext('2d'), img = wd.createImageData(1024, 256), r3 = mulberry32(11);
+  const knots = Array.from({ length: 6 }, () => [r3() * 1024, r3() * 256]);
+  for (let y = 0; y < 256; y++) for (let x = 0; x < 1024; x++) {
+    let warp = 6 * Math.sin(x * 0.004 + y * 0.03) + 3 * Math.sin(x * 0.013 + 1.7);
+    for (const [kx, ky] of knots) { const d = Math.hypot(x - kx, (y - ky) * 3); warp += 40 * Math.exp(-d * d / 1800); }
+    const g = 0.5 + 0.5 * Math.sin((y + warp) * 0.85) * Math.sin((y + warp) * 0.11 + 0.6);
+    const f = (r3() - 0.5) * 0.08, k = clamp(g * 0.55 + 0.35 + f);
+    const i = (y * 1024 + x) * 4;
+    img.data[i] = lerp(150, 214, k); img.data[i + 1] = lerp(104, 166, k); img.data[i + 2] = lerp(62, 112, k); img.data[i + 3] = 255;
+  }
+  wd.putImageData(img, 0, 0);
+  TX.wood = wood;
+
+  // quartz countertop: warm white, soft grey veins
+  const q = canvas(2048, 200), qc = q.getContext('2d'), r4 = mulberry32(17);
+  qc.fillStyle = lin(qc, 0, 0, 0, 200, [[0, '#f7f5f1'], [1, '#e9e5de']]); qc.fillRect(0, 0, 2048, 200);
+  qc.filter = 'blur(1.5px)';
+  for (let v = 0; v < 14; v++) {
+    qc.strokeStyle = `rgba(120,118,115,${0.08 + r4() * 0.18})`; qc.lineWidth = 0.8 + r4() * 3;
+    qc.beginPath(); let x = r4() * 2048, y = r4() * 200; qc.moveTo(x, y);
+    for (let s = 0; s < 4; s++) { const nx = x + 120 + r4() * 260, ny = clamp(y + (r4() - 0.5) * 140, 0, 200); qc.bezierCurveTo(x + 60, y + (r4() - .5) * 80, nx - 60, ny + (r4() - .5) * 80, nx, ny); x = nx; y = ny; }
+    qc.stroke();
+  }
+  qc.filter = 'none';
+  TX.quartz = q;
+
+  // glossy white subway tile (3x6 in), running bond
+  const tile = canvas(960, 300), tc = tile.getContext('2d');
+  tc.fillStyle = '#cfcac2'; tc.fillRect(0, 0, 960, 300);
+  for (let row = 0; row < 6; row++) for (let col = -1; col < 7; col++) {
+    const x = col * 160 + (row % 2) * 80 + 3, y = row * 50 + 3;
+    tc.fillStyle = lin(tc, 0, y, 0, y + 44, [[0, '#fbfaf8'], [0.5, '#f1efea'], [1, '#e4e0d9']]);
+    rr(tc, x, y, 154, 44, 3); tc.fill();
+    tc.fillStyle = 'rgba(255,255,255,0.55)'; rr(tc, x + 8, y + 5, 138, 6, 3); tc.fill();
+  }
+  TX.tile = tile;
+
+  // grain: 4 deterministic frames
+  TX.grain = [0, 1, 2, 3].map(k => {
+    const g = canvas(480, 270), gc = g.getContext('2d'), d = gc.createImageData(480, 270), r = mulberry32(100 + k);
+    for (let i = 0; i < d.data.length; i += 4) { const v = r() * 255; d.data[i] = d.data[i + 1] = d.data[i + 2] = v; d.data[i + 3] = 255; }
+    gc.putImageData(d, 0, 0); return g;
+  });
+}
+
+// ------------------------------------------------------------------ objects
+// White shaker door. Light comes from the upper left.
+function door(c, x, y, w, h, o = {}) {
+  const tone = o.tone || 0;
+  c.save();
+  shadow(c, 18, 3, 8, 'rgba(40,30,20,0.28)');
+  c.fillStyle = lin(c, x, y, x + w * 0.4, y + h, [[0, `hsl(40,22%,${96 - tone}%)`], [1, `hsl(38,16%,${88 - tone}%)`]]);
+  rr(c, x, y, w, h, 3); c.fill();
+  noShadow(c);
+  // slab edges
+  c.fillStyle = 'rgba(255,255,255,0.8)'; c.fillRect(x + 2, y + 1, w - 4, 2); c.fillRect(x + 1, y + 2, 2, h - 4);
+  c.fillStyle = 'rgba(70,55,40,0.18)'; c.fillRect(x + 2, y + h - 3, w - 4, 2); c.fillRect(x + w - 3, y + 2, 2, h - 4);
+  // recessed centre panel
+  const s = Math.min(w, h) * 0.17, px = x + s, py = y + s, pw = w - 2 * s, ph = h - 2 * s;
+  c.fillStyle = lin(c, px, py, px + pw * 0.3, py + ph, [[0, `hsl(40,18%,${91 - tone}%)`], [1, `hsl(38,14%,${85 - tone}%)`]]);
+  c.fillRect(px, py, pw, ph);
+  c.fillStyle = lin(c, 0, py, 0, py + 10, [[0, 'rgba(60,45,30,0.32)'], [1, 'rgba(60,45,30,0)']]); c.fillRect(px, py, pw, 10);
+  c.fillStyle = lin(c, px, 0, px + 8, 0, [[0, 'rgba(60,45,30,0.22)'], [1, 'rgba(60,45,30,0)']]); c.fillRect(px, py, 8, ph);
+  c.fillStyle = 'rgba(255,255,255,0.7)'; c.fillRect(px, py + ph - 2, pw, 2); c.fillRect(px + pw - 2, py, 2, ph);
+  // brushed brass bar pull
+  if (o.pull) {
+    const bx = o.pull === 'right' ? x + w - s * 0.55 : x + s * 0.55, by = o.pullBottom ? y + h - s - h * 0.28 : y + s, bh = h * 0.24;
+    shadow(c, 8, 4, 6, 'rgba(40,25,10,0.35)');
+    c.fillStyle = lin(c, bx - 6, 0, bx + 6, 0, [[0, BRASS[0]], [0.35, BRASS[2]], [0.6, BRASS[1]], [1, BRASS[0]]]);
+    rr(c, bx - 6, by, 12, bh, 6); c.fill(); noShadow(c);
+  }
+  c.restore();
+}
+
+// A door seen swinging on its left hinge: outer quad + inset shaker panel + pull, shaded by angle.
+function swingDoor(c, x0, y0, w, h, ang, growK) {
+  const cos = Math.cos(ang), k = Math.sin(ang), fx = x0 + w * cos, grow = growK * k;
+  const P4 = (u, v) => [lerp(x0, fx, u), lerp(lerp(y0, y0 - grow, u), lerp(y0 + h, y0 + h + grow, u), v)];
+  const quad = (pts, fill) => { c.fillStyle = fill; c.beginPath(); pts.forEach(([px, py], i) => i ? c.lineTo(px, py) : c.moveTo(px, py)); c.closePath(); c.fill(); };
+  quad([P4(0, 0), P4(1, 0), P4(1, 1), P4(0, 1)], lin(c, x0, 0, fx, 0, [[0, '#e7e2d9'], [1, '#fbf9f5']]));
+  const su = 0.17 * Math.min(w, h) / w, sv = 0.17 * Math.min(w, h) / h;
+  quad([P4(su, sv), P4(1 - su, sv), P4(1 - su, 1 - sv), P4(su, 1 - sv)], lin(c, x0, 0, fx, 0, [[0, '#ddd7cd'], [1, '#f0ece5']]));
+  quad([P4(su, sv), P4(1 - su, sv), P4(1 - su, sv + 0.012), P4(su, sv + 0.012)], 'rgba(60,45,30,0.25)');
+  c.fillStyle = '#cfc8bc'; c.fillRect(fx, y0 - grow, 26 * k, h + 2 * grow);
+  const [px, py] = P4(1 - su * 0.55, 1 - sv - 0.28), [, py2] = P4(1 - su * 0.55, 1 - sv - 0.04);
+  c.fillStyle = lin(c, px - 7, 0, px + 7, 0, [[0, BRASS[0]], [0.5, BRASS[2]], [1, BRASS[0]]]); rr(c, px - 7, py, 13, py2 - py, 6); c.fill();
+  return fx;
+}
+
+// Upper cabinet with face frame. doors: [{dx,dy,rot}] offsets let it hang badly.
+function cabinet(c, x, y, w, h, o = {}) {
+  const n = o.doors || 2, frame = 10, gap = 4;
+  c.save();
+  shadow(c, 50, 10, 28, 'rgba(45,30,15,0.38)');
+  c.fillStyle = lin(c, x, y, x, y + h, [[0, '#efebe4'], [1, '#e2ddd4']]);
+  c.fillRect(x, y, w, h); noShadow(c);
+  c.fillStyle = 'rgba(0,0,0,0.12)'; c.fillRect(x, y + h - 4, w, 4);
+  const dw = (w - 2 * frame - gap * (n - 1)) / n;
+  for (let i = 0; i < n; i++) {
+    const off = (o.offsets && o.offsets[i]) || {}, dx = x + frame + i * (dw + gap);
+    c.save();
+    c.translate(dx + dw / 2 + (off.dx || 0), y + frame + (h - 2 * frame) / 2 + (off.dy || 0));
+    c.rotate((off.rot || 0) * Math.PI / 180);
+    door(c, -dw / 2, -(h - 2 * frame) / 2, dw, h - 2 * frame, { pull: n === 1 ? 'right' : (i === 0 ? 'right' : 'left'), pullBottom: true });
+    c.restore();
+  }
+  c.restore();
+}
+
+function lowerCabinets(c, x, y, w, h) {
+  c.fillStyle = '#e3ded5'; c.fillRect(x, y, w, h);
+  const n = Math.round(w / 300), dw = (w - 20 - 4 * (n - 1)) / n;
+  for (let i = 0; i < n; i++) door(c, x + 10 + i * (dw + 4), y + 10, dw, h - 30, { pull: i % 2 ? 'left' : 'right' });
+  c.fillStyle = '#2a241e'; c.fillRect(x, y + h - 20, w, 20); // toe kick
+}
+
+// Aluminium spirit level with one vial; bubble offset in vial units (-1..1).
+function spiritLevel(c, x, y, w, h, bubble) {
+  c.save();
+  shadow(c, 20, 0, 10, 'rgba(0,0,0,0.35)');
+  c.fillStyle = lin(c, 0, y, 0, y + h, [[0, '#dfe2e6'], [0.25, '#b9bec5'], [0.5, '#e9ecef'], [1, '#8d939b']]);
+  rr(c, x, y, w, h, h * 0.12); c.fill(); noShadow(c);
+  // brushed lines
+  c.globalAlpha = 0.12; c.fillStyle = '#fff';
+  for (let i = 0; i < 18; i++) c.fillRect(x, y + h * (0.1 + i * 0.045), w, 1);
+  c.globalAlpha = 1;
+  // vial window
+  const vw = h * 2.6, vh = h * 0.55, vx = x + w / 2 - vw / 2, vy = y + h / 2 - vh / 2;
+  c.fillStyle = '#1d2024'; rr(c, vx - 8, vy - 8, vw + 16, vh + 16, vh * 0.3); c.fill();
+  c.fillStyle = lin(c, 0, vy, 0, vy + vh, [[0, '#a8d94a'], [0.5, '#d4f27a'], [1, '#79a827']]);
+  rr(c, vx, vy, vw, vh, vh / 2); c.fill();
+  // bubble
+  const bx = x + w / 2 + bubble * vw * 0.36, br = vh * 0.36;
+  c.fillStyle = rad(c, bx - br * 0.3, vy + vh / 2 - br * 0.3, br * 0.1, br * 1.2, [[0, 'rgba(255,255,240,0.95)'], [0.7, 'rgba(235,250,190,0.75)'], [1, 'rgba(150,190,60,0.2)']]);
+  c.beginPath(); c.ellipse(bx, vy + vh / 2, br * 1.5, br, 0, 0, Math.PI * 2); c.fill();
+  // centre lines
+  c.fillStyle = '#1d2024';
+  c.fillRect(x + w / 2 - vh * 0.75, vy - 2, 4, vh + 4); c.fillRect(x + w / 2 + vh * 0.75 - 4, vy - 2, 4, vh + 4);
+  // glass highlight
+  c.fillStyle = 'rgba(255,255,255,0.45)'; rr(c, vx + vh * 0.4, vy + vh * 0.12, vw - vh * 0.8, vh * 0.16, vh * 0.08); c.fill();
+  c.restore();
+}
+
+// Back-view person, simple painted forms. o: {hair, ponytail, cap, shirt, pants, armsUp(0..1), tool}
+function person(c, x, foot, h, o) {
+  const u = h / 100, head = 6.6 * u, sh = foot - 82 * u;
+  c.save();
+  const shade = (base, dx = 0) => lin(c, x - 14 * u + dx, 0, x + 14 * u + dx, 0, [[0, base[0]], [1, base[1]]]);
+  // legs
+  c.fillStyle = shade(o.pants);
+  rr(c, x - 9 * u, foot - 47 * u, 8.2 * u, 47 * u, 3 * u); c.fill();
+  rr(c, x + 0.8 * u, foot - 47 * u, 8.2 * u, 47 * u, 3 * u); c.fill();
+  c.fillStyle = '#2b2520'; rr(c, x - 10 * u, foot - 3 * u, 10 * u, 3.4 * u, 1.5 * u); c.fill(); rr(c, x, foot - 3 * u, 10 * u, 3.4 * u, 1.5 * u); c.fill();
+  // arms (behind torso when raised)
+  const arm = (side) => {
+    const sx = x + side * 11.5 * u, sy = sh + 3 * u;
+    const ang = lerp(side * 0.12, side * (o.armSpread || 0.32) - Math.PI * 0.94 * side * 0 + (side < 0 ? 0 : 0), 0);
+    const up = o.armsUp || 0;
+    c.save(); c.translate(sx, sy);
+    c.rotate(side * lerp(0.1, 2.75, up));
+    c.fillStyle = shade(o.shirt); rr(c, -3.4 * u, 0, 6.8 * u, 17 * u, 3.4 * u); c.fill();
+    c.translate(0, 16 * u); c.rotate(side * lerp(0.05, 0.25, up));
+    c.fillStyle = shade(o.sleeve || o.shirt); rr(c, -3 * u, 0, 6 * u, 15 * u, 3 * u); c.fill();
+    c.fillStyle = o.skin || '#b98a6a'; c.beginPath(); c.ellipse(0, 16.5 * u, 2.8 * u, 3.4 * u, 0, 0, Math.PI * 2); c.fill();
+    if (o.tool && side > 0) { c.fillStyle = '#1e1e1e'; rr(c, -2.5 * u, 15 * u, 5 * u, 10 * u, 1 * u); c.fill(); c.fillStyle = '#e8b800'; rr(c, -3.5 * u, 22 * u, 7 * u, 8 * u, 1.5 * u); c.fill(); }
+    c.restore();
+  };
+  arm(-1); arm(1);
+  // torso
+  c.fillStyle = shade(o.shirt);
+  c.beginPath(); c.moveTo(x - 12 * u, sh + 2 * u); c.quadraticCurveTo(x, sh - 2 * u, x + 12 * u, sh + 2 * u);
+  c.lineTo(x + 9.6 * u, foot - 45 * u); c.lineTo(x - 9.6 * u, foot - 45 * u); c.closePath(); c.fill();
+  if (o.belt) { c.fillStyle = '#6b4a2b'; c.fillRect(x - 10 * u, foot - 48 * u, 20 * u, 3.4 * u); c.fillStyle = '#5a3c22'; rr(c, x + 5 * u, foot - 47 * u, 6 * u, 8 * u, 1 * u); c.fill(); }
+  // neck + head (back of head)
+  c.fillStyle = o.skin || '#b98a6a'; c.fillRect(x - 2.6 * u, sh - 5 * u, 5.2 * u, 6 * u);
+  c.fillStyle = lin(c, x - head, 0, x + head, 0, [[0, o.hair[0]], [1, o.hair[1]]]);
+  c.beginPath(); c.ellipse(x, sh - 6 * u - head * 0.8, head * 0.86, head, 0, 0, Math.PI * 2); c.fill();
+  if (o.ponytail) { c.beginPath(); c.ellipse(x + 1 * u, sh - 3.5 * u, 2.6 * u, 6.5 * u, 0.08, 0, Math.PI * 2); c.fill(); c.fillStyle = '#2b2b2b'; c.fillRect(x - 1.4 * u, sh - 9.4 * u, 4.6 * u, 1.4 * u); }
+  if (o.cap) {
+    c.fillStyle = lin(c, x - head, 0, x + head, 0, [[0, '#26344d'], [1, '#141c2b']]);
+    c.beginPath(); c.ellipse(x, sh - 7 * u - head, head * 0.92, head * 0.72, 0, Math.PI, 0); c.fill();
+    c.fillRect(x - head * 0.92, sh - 7 * u - head, head * 1.84, 2.2 * u);
+  }
+  c.restore();
+}
+
+// ------------------------------------------------------------------ type
+function title(t, start, kicker, text, o = {}) {
+  const p = clamp((t - start) / beat(1.2));
+  if (p <= 0) return;
+  const out = o.until ? 1 - clamp((t - o.until) / beat(0.6)) : 1;
+  const a = E.cubicOut(p) * out, x = o.x || 120, y = o.y || 900;
+  ctx.save();
+  // soft scrim for legibility
+  ctx.globalAlpha = 0.6 * a;
+  ctx.fillStyle = rad(ctx, x + 380, y - 40, 20, 820, [[0, 'rgba(10,8,6,0.75)'], [1, 'rgba(10,8,6,0)']]);
+  ctx.fillRect(0, 0, W, H);
+  ctx.globalAlpha = a;
+  const dy = lerp(24, 0, E.expoOut(p));
+  if (kicker) {
+    ctx.font = '700 30px Inter'; ctx.letterSpacing = '5px'; ctx.fillStyle = '#f0d699'; shadow(ctx, 12, 0, 2, 'rgba(0,0,0,0.7)');
+    ctx.fillText(kicker.toUpperCase(), x + 4, y - (o.size || 96) - 10 + dy);
+  }
+  ctx.font = `700 ${o.size || 96}px "Inter Display"`; ctx.letterSpacing = '-2px'; ctx.fillStyle = '#fbf8f2';
+  shadow(ctx, 24, 0, 4, 'rgba(0,0,0,0.45)');
+  ctx.fillText(text, x, y + dy);
+  ctx.restore();
+}
+
+// leader-line measurement callout
+function callout(x, y, lx, ly, label, a, good) {
+  ctx.save(); ctx.globalAlpha = a;
+  const col = good ? '#3f8f3a' : '#c2451e';
+  for (const [w, c] of [[7, 'rgba(255,255,255,0.9)'], [3, '#1b1a18']]) {
+    ctx.strokeStyle = c; ctx.lineWidth = w;
+    ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + (lx > x ? 12 : -12), y); ctx.lineTo(lx, ly); ctx.stroke();
+  }
+  ctx.font = '700 32px "JetBrains Mono"'; ctx.letterSpacing = '0px';
+  const tw = ctx.measureText(label).width + 56, bx = lx > x ? lx : lx - tw;
+  shadow(ctx, 14, 0, 4, 'rgba(0,0,0,0.35)'); ctx.fillStyle = '#1b1a18'; rr(ctx, bx, ly - 30, tw, 58, 29); ctx.fill(); noShadow(ctx);
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 26, ly - 1, 8, 0, 7); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(label, bx + 42, ly + 10);
+  ctx.restore();
+}
+
+function cam(cx, cy, s, rot, draw) {
+  ctx.save(); ctx.translate(W / 2, H / 2); ctx.scale(s, s); ctx.rotate(rot || 0); ctx.translate(-cx, -cy); draw(); ctx.restore();
+}
+function windowLight(strength = 1) {
+  ctx.save(); ctx.globalCompositeOperation = 'soft-light'; ctx.globalAlpha = 0.55 * strength;
+  ctx.fillStyle = lin(ctx, 0, 0, W, H * 0.4, [[0, '#fff3dc'], [0.6, '#b9a58a'], [1, '#3a2f25']]); ctx.fillRect(0, 0, W, H);
+  ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.16 * strength; ctx.filter = 'blur(40px)';
+  ctx.fillStyle = '#fff1d6'; ctx.beginPath(); ctx.moveTo(-200, 0); ctx.lineTo(500, 0); ctx.lineTo(1100, H); ctx.lineTo(300, H); ctx.fill();
+  ctx.restore();
+}
+function wallBg(darken = 0) {
+  ctx.drawImage(TX.wall, -480, -270, W + 960, H + 540);
+  if (darken) { ctx.fillStyle = `rgba(20,14,8,${darken})`; ctx.fillRect(-480, -270, W + 960, H + 540); }
+  if (false) { ctx.fillStyle = `rgba(20,14,8,${darken})`; ctx.fillRect(0, 0, W, H); }
+}
+function backsplash(y0, y1, x0 = -480, x1 = W + 480) {
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
+  for (let x = x0 - ((x0 % 960) + 960) % 960; x < x1; x += 960) for (let y = y0; y < y1; y += 300) ctx.drawImage(TX.tile, x, y);
+  ctx.restore();
+}
+function counter(y, x0 = -200, x1 = W + 200) {
+  ctx.save();
+  ctx.drawImage(TX.quartz, x0, y, x1 - x0, 60);
+  ctx.fillStyle = lin(ctx, 0, y + 50, 0, y + 64, [[0, '#d8d3ca'], [1, '#a9a297']]); ctx.fillRect(x0, y + 50, x1 - x0, 14);
+  ctx.restore();
+}
+
+// ------------------------------------------------------------------ scenes
+const scenes = {
+  problem(t, s0, s1) {
+    const vialCut = evExact('vial.in') - LEAD;
+    if (t < vialCut) {
+      const push = E.sineInOut(clamp((t - s0) / (vialCut - s0)));
+      cam(lerp(1000, 1130, push), lerp(500, 470, push), lerp(0.94, 1.04, push), 0, () => {
+        wallBg();
+        backsplash(800, 990); counter(985);
+        ctx.fillStyle = lin(ctx, 0, 1045, 0, 1200, [[0, '#d9d3c9'], [1, '#bdb5a8']]); ctx.fillRect(-200, 1045, W + 400, 300);
+        // the DIY cabinet: hung out of level, doors not parallel
+        ctx.save(); ctx.translate(1280, 470); ctx.rotate(-2.2 * Math.PI / 180);
+        cabinet(ctx, -380, -310, 760, 620, { offsets: [{ dx: -3, dy: 10, rot: 0.9 }, { dx: 4, dy: -2, rot: -0.7 }] });
+        // spirit level lying on top
+        spiritLevel(ctx, -300, -360, 600, 50, 0.85 + Math.sin(t * 3) * 0.03);
+        ctx.restore();
+      });
+      windowLight();
+      const g = P(t, ev('problem.gaps'), 1);
+      if (g > 0) {
+        callout(1262, 256, 1520, 200, 'gap 1/16 in', g);
+        callout(1290, 772, 1540, 860, 'gap 3/8 in', g);
+      }
+      title(t, ev('problem.t1'), '', 'She tried it herself.', { until: ev('problem.t2') - beat(0.2) });
+      title(t, ev('problem.t2'), '', 'Almost right isn’t right.');
+    } else {
+      // extreme close-up: bubble won't settle
+      const drift = clamp((t - vialCut) / beat(4));
+      ctx.save(); ctx.filter = 'blur(14px)'; ctx.drawImage(TX.wall, -100, -100, W + 200, H + 200); ctx.restore();
+      cam(960, 540, lerp(1.0, 1.05, drift), -2.2 * Math.PI / 180, () => {
+        spiritLevel(ctx, -400, 380, 2700, 320, 0.7 + Math.sin(t * 2.2) * 0.06 * (1 - drift * 0.5));
+      });
+      windowLight(0.8);
+    }
+  },
+
+  arrive(t, s0, s1) {
+    const push = E.sineInOut(clamp((t - s0) / (s1 - s0)));
+    cam(960, 520, lerp(1, 1.06, push), 0, () => {
+      wallBg(0.25);
+      const dx0 = 780, dx1 = 1140, dy0 = 110, dy1 = 930;
+      // floor
+      ctx.save(); ctx.globalAlpha = 0.85;
+      for (let i = 0; i < 4; i++) ctx.drawImage(TX.wood, -200 + i * 600, 930, 620, 220);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(30,20,10,0.35)'; ctx.fillRect(-200, 930, W + 400, 220);
+      // outside daylight
+      const open = P(t, ev('door.open'), 1.2, E.cubicOut);
+      ctx.save(); ctx.beginPath(); ctx.rect(dx0, dy0, dx1 - dx0, dy1 - dy0); ctx.clip();
+      ctx.fillStyle = lin(ctx, 0, dy0, 0, dy1, [[0, '#fff8e8'], [0.55, '#ffe9c2'], [1, '#c9b58f']]); ctx.fillRect(dx0, dy0, dx1 - dx0, dy1 - dy0);
+      ctx.filter = 'blur(18px)'; ctx.fillStyle = 'rgba(110,140,90,0.55)';
+      ctx.beginPath(); ctx.ellipse(860, 560, 120, 200, 0, 0, 7); ctx.ellipse(1100, 600, 140, 170, 0, 0, 7); ctx.fill(); ctx.filter = 'none';
+      // installer, backlit
+      if (open > 0.15) {
+        ctx.globalAlpha = clamp((open - 0.15) * 3);
+        person(ctx, 975, 935, 700, { hair: ['#1d1b1a', '#0e0d0c'], cap: true, shirt: ['#2a2b2e', '#141518'], pants: ['#23262c', '#121418'], belt: true, skin: '#3d2c22' });
+        ctx.fillStyle = '#16120e'; rr(ctx, 1035, 760, 90, 70, 10); ctx.fill(); // tool bag
+        ctx.globalAlpha = 1;
+      }
+      ctx.restore();
+      // door slab swinging inward (hinge on the left)
+      const ang = open * 1.25, cos = Math.cos(ang), k = Math.sin(ang);
+      const fx = dx0 + (dx1 - dx0) * cos, grow = 70 * k;
+      const knock = (Math.max(0, 1 - Math.abs(t - evExact('knock')) / 0.06) + Math.max(0, 1 - Math.abs(t - evExact('knock') - 0.22) / 0.06)) * 3;
+      ctx.save(); ctx.translate(knock, 0);
+      ctx.fillStyle = lin(ctx, dx0, 0, fx + 1, 0, [[0, '#6b4a2e'], [1, open > 0 ? '#3e2a19' : '#704d31']]);
+      ctx.beginPath(); ctx.moveTo(dx0, dy0); ctx.lineTo(fx, dy0 - grow); ctx.lineTo(fx, dy1 + grow); ctx.lineTo(dx0, dy1); ctx.fill();
+      ctx.globalAlpha = 0.25; ctx.drawImage(TX.wood, dx0, dy0, Math.max(1, fx - dx0), dy1 - dy0); ctx.globalAlpha = 1;
+      if (open < 0.6) { ctx.fillStyle = lin(ctx, 0, 0, 0, 1, [[0, BRASS[2]], [1, BRASS[0]]]); ctx.beginPath(); ctx.arc(lerp(dx1 - 40, fx - 30 * cos, open), 540, 12 * (1 + k * 0.2), 0, 7); ctx.fill(); }
+      ctx.restore();
+      // trim
+      ctx.fillStyle = '#efe9df'; ctx.fillRect(dx0 - 30, dy0 - 30, 30, dy1 - dy0 + 30); ctx.fillRect(dx1, dy0 - 30, 30, dy1 - dy0 + 30); ctx.fillRect(dx0 - 30, dy0 - 30, dx1 - dx0 + 60, 30);
+      // light spill on the floor
+      if (open > 0) {
+        ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = 0.6 * open; ctx.filter = 'blur(20px)';
+        ctx.fillStyle = '#ffe2b0'; ctx.beginPath(); ctx.moveTo(fx, dy1); ctx.lineTo(dx1, dy1); ctx.lineTo(dx1 + 260, 1150); ctx.lineTo(fx - 200, 1150); ctx.fill();
+        ctx.restore();
+      }
+    });
+    title(t, ev('arrive.t'), '', 'So she called a pro.');
+  },
+
+  laser(t, s0, s1) {
+    const pan = E.sineInOut(clamp((t - s0) / (s1 - s0)));
+    cam(lerp(860, 1180, pan), 540, 1.04, 0, () => {
+      wallBg(0.55);
+      // tripod + laser at the left
+      ctx.fillStyle = '#1a1a1a';
+      ctx.save(); ctx.translate(300, 470);
+      ctx.fillRect(-4, 40, 8, 700); ctx.rotate(0.18); ctx.fillRect(-4, 40, 8, 720); ctx.rotate(-0.36); ctx.fillRect(-4, 40, 8, 720);
+      ctx.restore();
+      shadow(ctx, 20, 0, 10, 'rgba(0,0,0,0.5)');
+      ctx.fillStyle = lin(ctx, 240, 0, 360, 0, [[0, '#e0a800'], [0.5, '#ffd23a'], [1, '#b98a00']]); rr(ctx, 240, 400, 120, 110, 14); ctx.fill(); noShadow(ctx);
+      ctx.fillStyle = '#222'; rr(ctx, 330, 430, 34, 50, 6); ctx.fill();
+      const on = clamp((t - ev('laser.on')) / 0.25);
+      if (on > 0) {
+        ctx.fillStyle = '#7dff6a'; ctx.beginPath(); ctx.arc(352, 455, 6, 0, 7); ctx.fill();
+        const reach = lerp(360, 2400, E.expoOut(on));
+        ctx.save(); ctx.globalCompositeOperation = 'screen';
+        shadow(ctx, 24, 0, 0, 'rgba(90,255,80,0.9)');
+        ctx.strokeStyle = 'rgba(150,255,130,0.95)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(360, 455); ctx.lineTo(reach, 455); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(1180, lerp(455, -50, E.expoOut(on))); ctx.lineTo(1180, lerp(455, 1200, E.expoOut(on))); ctx.stroke();
+        noShadow(ctx); ctx.globalAlpha = 0.15; ctx.filter = 'blur(10px)'; ctx.fillStyle = '#7dff6a'; ctx.fillRect(360, 445, reach - 360, 20);
+        ctx.restore();
+      }
+      // pencil stud marks along the line
+      const studs = [780, 1180, 1580, 1980];
+      let pencil = null;
+      studs.forEach((sx, i) => {
+        const m = clamp((t - ev('mark.' + i)) / 0.12);
+        if (m > 0) { ctx.strokeStyle = 'rgba(40,40,45,0.85)'; ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(sx - 10, 420); ctx.lineTo(sx, 420 + 30 * m); ctx.lineTo(sx + 10 * m, 420); ctx.stroke(); }
+        if (t >= ev('mark.' + i) - beat(0.4) && t < ev('mark.' + i) + beat(0.4)) pencil = { x: sx, p: m };
+      });
+      if (pencil || (t > ev('mark.0') - beat(0.8) && t < ev('mark.3') + beat(1))) {
+        const tgt = pencil || { x: studs[3], p: 1 };
+        const away = clamp((t - ev('mark.3') - beat(0.4)) / beat(0.6));
+        const px = tgt.x + 4, py = 450 + away * 300;
+        ctx.save(); ctx.translate(px, py); ctx.rotate(-0.55);
+        shadow(ctx, 14, 6, 10, 'rgba(0,0,0,0.4)');
+        ctx.fillStyle = '#f2c230'; ctx.fillRect(0, -9, 260, 18); noShadow(ctx);
+        ctx.fillStyle = '#e8cfa0'; ctx.beginPath(); ctx.moveTo(0, -9); ctx.lineTo(-30, 0); ctx.lineTo(0, 9); ctx.fill();
+        ctx.fillStyle = '#333'; ctx.beginPath(); ctx.moveTo(-20, -3); ctx.lineTo(-30, 0); ctx.lineTo(-20, 3); ctx.fill();
+        // gloved hand
+        ctx.fillStyle = lin(ctx, 60, -40, 200, 60, [[0, '#4a4c50'], [1, '#2a2b2e']]);
+        rr(ctx, 70, -34, 150, 80, 34); ctx.fill(); rr(ctx, 40, -22, 70, 30, 15); ctx.fill();
+        ctx.restore();
+      }
+    });
+    windowLight(0.5);
+    title(t, ev('laser.t'), 'Step 1 · laser-set line', 'Level.');
+  },
+
+  studs(t, s0, s1) {
+    const run = evExact('drill.run'), seat = evExact('screw.seat');
+    const drive = clamp((t - run) / (seat - run));
+    cam(960, 540, lerp(1.0, 1.04, clamp((t - s0) / (s1 - s0))), 0, () => {
+      ctx.save(); ctx.filter = 'blur(10px)'; ctx.drawImage(TX.wall, -100, -100, W + 200, H + 200); ctx.restore();
+      // cabinet hanging rail (maple), close up
+      shadow(ctx, 40, 0, 24, 'rgba(0,0,0,0.45)');
+      ctx.drawImage(TX.wood, 0, 0, 1024, 256, -100, 330, W + 200, 420); noShadow(ctx);
+      ctx.fillStyle = lin(ctx, 0, 330, 0, 750, [[0, 'rgba(255,240,215,0.35)'], [0.15, 'rgba(255,240,215,0)'], [1, 'rgba(40,20,5,0.35)']]); ctx.fillRect(-100, 330, W + 200, 420);
+      // screw: approaches until flush, spinning
+      const sc = lerp(1.25, 1, E.cubicOut(drive)), r = 64 * sc, cx = 960, cy = 540;
+      const gap = (1 - drive) * 26;
+      ctx.fillStyle = 'rgba(30,15,5,0.5)'; ctx.filter = `blur(${4 + gap * 0.4}px)`;
+      ctx.beginPath(); ctx.arc(cx + gap * 0.7, cy + gap, r, 0, 7); ctx.fill(); ctx.filter = 'none';
+      ctx.fillStyle = rad(ctx, cx - r * 0.35, cy - r * 0.4, r * 0.1, r * 1.2, [[0, '#fbfcfd'], [0.45, '#c3c8ce'], [1, '#7d848c']]);
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+      const spin = t < seat ? (t - run) * 40 * (t >= run ? 1 : 0) : (seat - run) * 40;
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(spin);
+      ctx.fillStyle = '#4b5056'; ctx.fillRect(-r * 0.62, -r * 0.09, r * 1.24, r * 0.18); ctx.fillRect(-r * 0.09, -r * 0.62, r * 0.18, r * 1.24);
+      ctx.restore();
+      // sawdust while driving
+      if (t > run && t < seat + 0.6) {
+        const rng = mulberry32(9);
+        for (let i = 0; i < 90; i++) {
+          const born = run + rng() * (seat - run), age = t - born, a0 = rng() * Math.PI * 2, sp = 180 + rng() * 420;
+          if (age < 0 || age > 1.1) { rng(); continue; }
+          const px = cx + Math.cos(a0) * (r + sp * age), py = cy + Math.sin(a0) * (r + sp * age) + 500 * age * age;
+          ctx.fillStyle = `rgba(${200 + rng() * 40},${150 + rng() * 40},${95 + rng() * 30},${1 - age / 1.1})`;
+          ctx.beginPath(); ctx.arc(px, py, 2 + rng() * 4, 0, 7); ctx.fill();
+        }
+      }
+      // drill: soft foreground silhouette at the right, pulls back after seating
+      const back = P(t, seat + beat(0.4), 1, E.expoInOut);
+      ctx.save(); ctx.translate(lerp(cx + r * 0.2, 2300, back), cy); ctx.filter = 'blur(3px)';
+      ctx.fillStyle = lin(ctx, 0, -70, 0, 70, [[0, '#3a3a3a'], [0.5, '#1c1c1c'], [1, '#0c0c0c']]); rr(ctx, 60, -55, 380, 110, 30); ctx.fill();
+      ctx.fillStyle = lin(ctx, 0, -60, 0, 60, [[0, '#ffd23a'], [1, '#c49200']]); rr(ctx, 300, -75, 520, 150, 50); ctx.fill();
+      ctx.fillStyle = '#9aa0a8'; ctx.fillRect(-10, -8, 80, 16);
+      ctx.restore();
+    });
+    windowLight(0.6);
+    title(t, ev('studs.t'), 'Step 2 · anchored to framing', 'Into the studs.', { y: 960 });
+  },
+
+  together(t, s0, s1) {
+    const push = E.sineInOut(clamp((t - s0) / (s1 - s0)));
+    const lift = P(t, ev('lift.in'), 1.5, E.cubicOut);
+    cam(960, 560, lerp(1.0, 1.05, push), 0, () => {
+      wallBg();
+      backsplash(820, 990); counter(985);
+      ctx.fillStyle = lin(ctx, 0, 1045, 0, 1200, [[0, '#d9d3c9'], [1, '#bdb5a8']]); ctx.fillRect(-200, 1045, W + 400, 300);
+      // laser line still on the wall + one cabinet already hung
+      ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.strokeStyle = 'rgba(140,255,120,0.6)'; ctx.lineWidth = 2; shadow(ctx, 14, 0, 0, '#7dff6a');
+      ctx.beginPath(); ctx.moveTo(-200, 150); ctx.lineTo(W + 200, 150); ctx.stroke(); ctx.restore();
+      cabinet(ctx, 260, 150, 520, 560, { doors: 2 });
+      cabinet(ctx, 800, lerp(260, 150, lift), 520, 560, { doors: 2 });
+      // her: holding the cabinet steady; him: fastening at the top corner
+      person(ctx, 1000, 1080, 640, { hair: ['#5a3a26', '#2f1e13'], ponytail: true, shirt: ['#8a9a80', '#5d6b55'], pants: ['#4a5a78', '#2e3a52'], armsUp: 0.62, skin: '#d9a98a' });
+      const drillIn = clamp((t - ev('lift.drill')) / beat(1.25));
+      person(ctx, 1450, 1110, 700, { hair: ['#2a221c', '#120e0b'], cap: true, shirt: ['#4a4e55', '#2a2d32'], pants: ['#2f3540', '#1a1e26'], armsUp: 0.8, belt: true, tool: true, skin: '#a8785a' });
+      if (drillIn > 0 && drillIn < 1) {
+        const rng = mulberry32(Math.floor(t * 30));
+        for (let i = 0; i < 12; i++) { ctx.fillStyle = 'rgba(220,180,120,0.8)'; ctx.beginPath(); ctx.arc(1300 + (rng() - 0.5) * 60, 330 + (rng() - 0.5) * 60, 2 + rng() * 3, 0, 7); ctx.fill(); }
+      }
+    });
+    windowLight();
+    title(t, ev('together.t'), '', 'Together, the right way.', { y: 990, size: 84 });
+  },
+
+  square(t, s0, s1) {
+    const clampCut = evExact('clamp') - beat(1) - LEAD;
+    if (t < clampCut) {
+      const drift = clamp((t - s0) / (clampCut - s0));
+      ctx.save(); ctx.filter = 'blur(16px)'; ctx.drawImage(TX.wall, -100, -100, W + 200, H + 200); ctx.restore();
+      cam(960, 540, lerp(1.0, 1.04, drift), 0, () => {
+        // cabinet underside edge + shim
+        ctx.fillStyle = lin(ctx, 0, 640, 0, 760, [[0, '#f1ede6'], [1, '#d9d3c9']]); ctx.fillRect(-200, 640, W + 400, 120);
+        const shim = P(t, ev('shim'), 0.6, E.cubicOut);
+        ctx.save(); ctx.translate(lerp(-660, -120, shim), 762);
+        shadow(ctx, 18, 0, 10, 'rgba(0,0,0,0.35)');
+        ctx.fillStyle = lin(ctx, 0, 0, 0, 70, [[0, '#ecd09c'], [1, '#b8915a']]);
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(620, 0); ctx.lineTo(620, 10); ctx.lineTo(0, 70); ctx.closePath(); ctx.fill(); noShadow(ctx);
+        ctx.save(); ctx.clip(); ctx.globalAlpha = 0.35; ctx.drawImage(TX.wood, 0, 0, 1024, 60, 0, 0, 620, 70); ctx.restore();
+        ctx.restore();
+        const settle = clamp((t - ev('shim')) / (evExact('bubble.center') - ev('shim')));
+        const wob = t > evExact('bubble.center') ? Math.sin((t - evExact('bubble.center')) * 18) * 0.05 * Math.exp(-(t - evExact('bubble.center')) * 4) : 0;
+        spiritLevel(ctx, -300, 450, 2500, 190, lerp(0.75, 0, E.expoInOut(settle)) + wob);
+      });
+      windowLight(0.7);
+      title(t, ev('square.t'), 'Step 3 · shimmed & clamped', 'Square.', { y: 250 });
+    } else {
+      // face frames clamped flush
+      const sq = P(t, ev('clamp'), 0.5, E.expoOut);
+      wallBg(0.1);
+      const seamX = 960, step = lerp(8, 0, sq), drop = lerp(10, 0, sq);
+      ctx.fillStyle = lin(ctx, 0, 0, W, 0, [[0, '#f2eee7'], [1, '#e6e1d8']]); ctx.fillRect(0, 0, seamX, H);
+      ctx.fillRect(seamX, drop, W - seamX, H);
+      ctx.fillStyle = `rgba(60,40,20,${0.18 + step * 0.04})`; ctx.fillRect(seamX - 1 - step, 0, 2 + step * 2, H);
+      door(ctx, 600, 120, 330, 840, { pull: 'right' }); door(ctx, 990, 120 + drop, 330, 840, { pull: 'left' });
+      // F-clamp across the seam
+      const jaw = lerp(70, 0, sq);
+      ctx.save(); shadow(ctx, 20, 0, 10, 'rgba(0,0,0,0.4)');
+      ctx.fillStyle = '#9aa1a9'; ctx.fillRect(seamX - 260, 470, 520, 26);
+      ctx.fillStyle = '#d24a1e'; rr(ctx, seamX - 300, 440 - jaw * 0.1, 80, 90, 10); ctx.fill(); rr(ctx, seamX + 220 + jaw, 440, 80, 90, 10); ctx.fill();
+      ctx.fillStyle = '#1e1e1e'; rr(ctx, seamX + 300 + jaw, 455, 160, 60, 28); ctx.fill();
+      ctx.restore();
+      windowLight(0.7);
+      title(t, ev('square.t'), 'Step 3 · shimmed & clamped', 'Square.');
+    }
+  },
+
+  gaps(t, s0, s1) {
+    const closeT = ev('gaps.even') - beat(0.6);
+    const shut = P(t, closeT, 0.5, E.expoOut);
+    cam(960, 540, lerp(1.06, 1.0, clamp((t - s0) / (s1 - s0))), 0, () => {
+      wallBg();
+      const x = 470, y = 140, w = 980, h = 800, fr = 12;
+      ctx.save(); shadow(ctx, 50, 10, 28, 'rgba(45,30,15,0.38)'); ctx.fillStyle = '#ece8e1'; ctx.fillRect(x, y, w, h); ctx.restore();
+      ctx.fillStyle = '#d8d2c8'; ctx.fillRect(x + fr, y + fr, w - 2 * fr, h - 2 * fr);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(x + fr, y + fr, w - 2 * fr, 30);
+      const dw = (w - 2 * fr - 6) / 2, dh = h - 2 * fr;
+      // right door closed
+      door(ctx, x + fr + dw + 6 + lerp(6, 0, shut), y + fr, dw, dh, { pull: 'left', pullBottom: true });
+      // left door: open, then swings shut
+      const ang = lerp(1.15, 0, shut), cos = Math.cos(ang), k = Math.sin(ang);
+      if (ang < 0.02) door(ctx, x + fr, y + fr, dw, dh, { pull: 'right', pullBottom: true });
+      else {
+        const x0 = x + fr;
+        swingDoor(ctx, x0, y + fr, dw, dh, ang, 90);
+        // concealed hinge + screwdriver at the frame
+        [y + 120, y + h - 160].forEach(hy => { ctx.fillStyle = '#b8bec5'; rr(ctx, x0 + 2, hy, 34, 70, 6); ctx.fill(); ctx.fillStyle = '#80868d'; ctx.beginPath(); ctx.arc(x0 + 19, hy + 35, 6, 0, 7); ctx.fill(); });
+        const turn = clamp((t - ev('hinge.turn')) / beat(1.5));
+        if (t < closeT) {
+          ctx.save(); ctx.translate(x0 + 19, y + 155); ctx.rotate(-0.9);
+          ctx.fillStyle = '#c3c8ce'; ctx.fillRect(0, -5, 200, 10);
+          ctx.fillStyle = lin(ctx, 0, -26, 0, 26, [[0, '#ffd23a'], [1, '#c49200']]); rr(ctx, 190, -26, 220, 52, 22); ctx.fill();
+          ctx.fillStyle = 'rgba(0,0,0,0.35)'; for (let i = 0; i < 4; i++) ctx.fillRect(210 + ((i * 50 + turn * 300) % 200), -26, 10, 52);
+          ctx.restore();
+        }
+      }
+    });
+    windowLight();
+    const g = P(t, ev('gaps.even'), 0.8);
+    if (g > 0) {
+      callout(965, 300, 1180, 230, '1/8 in', g, true);
+      callout(487, 600, 300, 540, '1/8 in', g, true);
+      callout(1436, 600, 1620, 540, '1/8 in', g, true);
+    }
+    title(t, ev('gaps.t'), 'Step 4 · hinges dialed in', 'Every gap even.', { y: 1000, size: 84 });
+  },
+
+  reveal(t, s0, s1) {
+    const dolly = E.sineInOut(clamp((t - s0) / (s1 - s0)));
+    cam(lerp(980, 1010, dolly), lerp(560, 540, dolly), lerp(1.0, 1.07, dolly), 0, () => {
+      wallBg();
+      // window at the left
+      ctx.save(); shadow(ctx, 30, 0, 10, 'rgba(0,0,0,0.25)'); ctx.fillStyle = '#efe9df'; ctx.fillRect(40, 120, 300, 620); ctx.restore();
+      ctx.fillStyle = lin(ctx, 0, 140, 0, 720, [[0, '#fff9ec'], [1, '#f1dfb8']]); ctx.fillRect(60, 140, 260, 580);
+      ctx.save(); ctx.filter = 'blur(14px)'; ctx.fillStyle = 'rgba(120,150,100,0.55)'; ctx.beginPath(); ctx.ellipse(150, 600, 110, 140, 0, 0, 7); ctx.ellipse(260, 640, 90, 110, 0, 0, 7); ctx.fill(); ctx.restore();
+      ctx.fillStyle = '#efe9df'; ctx.fillRect(186, 140, 8, 580); ctx.fillRect(60, 420, 260, 8);
+      backsplash(780, 975, 380, W + 200);
+      // finished uppers, perfectly level
+      [[400, 2], [920, 2], [1440, 1], [1700, 2]].forEach(([x, n], i) => cabinet(ctx, x, 120, n === 1 ? 250 : 500, 600, { doors: n }));
+      // under-cabinet lights
+      [[400, 500], [920, 500], [1440, 250], [1700, 500]].forEach(([x, w], i) => {
+        const on = clamp((t - ev('light.' + i)) / 0.15);
+        if (on <= 0) return;
+        ctx.save(); ctx.globalCompositeOperation = 'screen'; ctx.globalAlpha = on;
+        ctx.fillStyle = '#fff2d2'; ctx.fillRect(x + 20, 722, w - 40, 4);
+        ctx.filter = 'blur(26px)';
+        ctx.fillStyle = lin(ctx, 0, 726, 0, 990, [[0, 'rgba(255,214,150,0.85)'], [1, 'rgba(255,214,150,0)']]);
+        ctx.beginPath(); ctx.moveTo(x + 20, 726); ctx.lineTo(x + w - 20, 726); ctx.lineTo(x + w + 30, 985); ctx.lineTo(x - 30, 985); ctx.fill();
+        ctx.restore();
+      });
+      counter(975, 380, W + 200);
+      lowerCabinets(ctx, 380, 1039, W - 180, 420);
+      // the two of them, admiring it (soft foreground)
+      ctx.save(); ctx.filter = 'blur(2.5px)';
+      person(ctx, 250, 1260, 760, { hair: ['#5a3a26', '#2f1e13'], ponytail: true, shirt: ['#8a9a80', '#5d6b55'], pants: ['#4a5a78', '#2e3a52'], skin: '#d9a98a' });
+      person(ctx, 110, 1300, 820, { hair: ['#2a221c', '#120e0b'], cap: true, shirt: ['#4a4e55', '#2a2d32'], pants: ['#2f3540', '#1a1e26'], belt: true, skin: '#a8785a' });
+      ctx.restore();
+    });
+    windowLight();
+    title(t, ev('reveal.t'), '', 'Now it’s right.', { x: 560, y: 1000 });
+  },
+
+  close(t, s0, s1) {
+    // soft-close: fast swing, then the damper takes over for the last stretch
+    const push = evExact('close.push'), thud = evExact('close.thud');
+    const p = clamp((t - push) / (thud - push));
+    const ang = p < 0.55 ? lerp(0.55, 0.12, E.cubicOut(p / 0.55)) : lerp(0.12, 0, E.sineInOut((p - 0.55) / 0.45));
+    cam(960, 540, lerp(1.0, 1.05, clamp((t - s0) / (s1 - s0))), 0, () => {
+      wallBg(0.05);
+      const x0 = 520, y0 = 60, dw = 760, dh = 1100;
+      ctx.save(); shadow(ctx, 40, 10, 20, 'rgba(45,30,15,0.35)'); ctx.fillStyle = '#ece8e1'; ctx.fillRect(x0 - 20, y0 - 20, dw + 40, dh); ctx.restore();
+      ctx.fillStyle = '#cfc8bc'; ctx.fillRect(x0, y0, dw, dh);
+      ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x0, y0, dw, 40);
+      if (ang < 0.004) door(ctx, x0, y0, dw, dh, { pull: 'right', pullBottom: true });
+      else {
+        swingDoor(ctx, x0, y0, dw, dh, ang, 140);
+      }
+      // her fingertips push the door, then lift away
+      const fingerOut = P(t, push + beat(0.5), 1, E.expoInOut);
+      const fxNow = x0 + dw * Math.cos(Math.max(ang, 0)) - 50;
+      ctx.save(); ctx.translate(lerp(fxNow + 4, 2200, fingerOut), 760 + fingerOut * 200);
+      // sleeve, back of hand, curled fingers, extended index finger (fingertip at 0,0)
+      shadow(ctx, 26, 10, 16, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = lin(ctx, 0, -40, 0, 260, [[0, '#8d9c84'], [1, '#56634e']]); rr(ctx, 360, -70, 600, 300, 110); ctx.fill();
+      const skin = lin(ctx, 0, -50, 0, 170, [[0, '#ecc0a2'], [0.6, '#d6a181'], [1, '#b98262']]);
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.moveTo(150, -18); ctx.bezierCurveTo(220, -60, 340, -62, 400, -30); ctx.lineTo(420, 170);
+      ctx.bezierCurveTo(330, 200, 220, 190, 170, 140); ctx.bezierCurveTo(120, 90, 110, 20, 150, -18); ctx.fill();
+      noShadow(ctx);
+      [[178, 52, 34], [190, 104, 32], [214, 150, 28]].forEach(([cx, cy, r]) => { ctx.fillStyle = skin; ctx.beginPath(); ctx.ellipse(cx, cy, r * 1.25, r, 0.25, 0, 7); ctx.fill();
+        ctx.strokeStyle = 'rgba(120,70,45,0.35)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(cx, cy, r * 1.25, r, 0.25, 2.2, 3.6); ctx.stroke(); });
+      ctx.fillStyle = skin;
+      ctx.beginPath(); ctx.moveTo(4, -14); ctx.bezierCurveTo(-6, -8, -6, 12, 6, 16); ctx.lineTo(180, 26); ctx.lineTo(186, -26); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,225,210,0.75)'; rr(ctx, 6, -10, 30, 18, 8); ctx.fill();
+      ctx.strokeStyle = 'rgba(120,70,45,0.3)'; ctx.lineWidth = 2; [70, 120].forEach(kx => { ctx.beginPath(); ctx.moveTo(kx, -18); ctx.lineTo(kx + 3, 20); ctx.stroke(); });
+      ctx.fillStyle = 'rgba(255,240,230,0.35)'; ctx.beginPath(); ctx.ellipse(270, -20, 90, 18, -0.1, 0, 7); ctx.fill();
+      ctx.restore();
+    });
+    windowLight(0.8);
+    title(t, ev('close.t'), 'Soft-close · built in', 'Built to last.', { y: 980 });
+  },
+
+  end(t) {
+    ctx.fillStyle = '#14110e'; ctx.fillRect(0, 0, W, H);
+    ctx.save(); ctx.globalAlpha = 0.35; ctx.filter = 'blur(6px)';
+    ctx.drawImage(TX.wood, 0, 0, 1024, 256, -200, -100, W + 400, H + 200); ctx.restore();
+    ctx.fillStyle = rad(ctx, W / 2, H * 0.45, 100, 1100, [[0, 'rgba(20,16,12,0.35)'], [1, 'rgba(10,8,6,0.95)']]); ctx.fillRect(0, 0, W, H);
+    const a = P(t, ev('end.in'), 1.2), b = P(t, ev('end.cta'), 1);
+    ctx.save(); ctx.textAlign = 'center';
+    ctx.globalAlpha = a;
+    ctx.font = '600 26px Inter'; ctx.letterSpacing = '8px'; ctx.fillStyle = '#d9bb7c';
+    ctx.fillText('LEVEL · SQUARE · BUILT TO LAST', W / 2, 400 + lerp(20, 0, a));
+    ctx.font = '700 104px "Inter Display"'; ctx.letterSpacing = '-2px'; ctx.fillStyle = '#fbf8f2';
+    ctx.fillText('Professional Cabinet', W / 2, 520 + lerp(30, 0, a)); ctx.fillText('Installation', W / 2, 636 + lerp(30, 0, a));
+    ctx.globalAlpha = b;
+    ctx.strokeStyle = '#d9bb7c'; ctx.lineWidth = 2.5; rr(ctx, W / 2 - 330, 720, 660, 84, 42); ctx.stroke();
+    ctx.font = '600 36px Inter'; ctx.letterSpacing = '0px'; ctx.fillStyle = '#f3e2b4';
+    ctx.fillText('Book a free in-home estimate', W / 2, 774);
+    const line = [BRAND.name, BRAND.phone, BRAND.web].filter(Boolean).join('   ·   ');
+    if (line) { ctx.font = '500 34px Inter'; ctx.fillStyle = '#cfc6b8'; ctx.fillText(line, W / 2, 880); }
+    ctx.restore();
+  },
+};
+
+function finish(t) {
+  // film grain + vignette + letterbox fade
+  ctx.save(); ctx.globalCompositeOperation = 'overlay'; ctx.globalAlpha = 0.09;
+  ctx.drawImage(TX.grain[Math.round(t * BEATS.fps) % 4], 0, 0, W, H); ctx.restore();
+  ctx.fillStyle = rad(ctx, W / 2, H / 2, H * 0.45, H * 1.05, [[0, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,0.55)']]); ctx.fillRect(0, 0, W, H);
+  const fade = clamp((t - beat(BEATS.bars * BEATS.beatsPerBar)) / BEATS.tailSeconds);
+  const fadeIn = 1 - clamp(t / 0.6);
+  if (fade + fadeIn > 0) { ctx.fillStyle = `rgba(0,0,0,${Math.max(fade, fadeIn)})`; ctx.fillRect(0, 0, W, H); }
+}
+
+function seek(t) {
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1; ctx.filter = 'none'; ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  const secs = BEATS.sections;
+  for (const sec of secs) {
+    const s0 = beat(sec.fromBeat), s1 = beat(sec.toBeat), last = sec === secs[secs.length - 1];
+    if (t >= s0 - (sec.fromBeat ? LEAD : 0) && (t < s1 - LEAD || (last && t <= DURATION))) { ctx.save(); scenes[sec.id](t, s0, s1); ctx.restore(); }
+  }
+  finish(t);
+}
+
+window.ready = (async () => {
+  BEATS = await (await fetch('./beats.json')).json();
+  SPB = 60 / BEATS.bpm;
+  DURATION = beat(BEATS.bars * BEATS.beatsPerBar) + BEATS.tailSeconds;
+  await Promise.all(['700 100px "Inter Display"', '600 30px Inter', '600 30px "JetBrains Mono"'].map(f => document.fonts.load(f)));
+  buildTextures();
+  window.seek = seek; window.DURATION = DURATION;
+  seek(0);
+  return { duration: DURATION, fps: BEATS.fps };
+})();
+
+if (new URLSearchParams(location.search).has('render')) document.body.classList.add('render');
+else window.ready.then(() => {
+  const fit = () => { const s = Math.min(innerWidth / 1920, (innerHeight - 50) / 1080); document.getElementById('stage').style.transform = `scale(${s})`; };
+  fit(); addEventListener('resize', fit);
+  const audio = new Audio('../../out/cabinet-promo.wav'); let playing = false;
+  const $ = id => document.getElementById(id);
+  const tick = () => { if (!playing) return; seek(audio.currentTime); $('scrub').value = audio.currentTime / DURATION; $('clock').textContent = audio.currentTime.toFixed(2) + 's'; if (audio.ended) { playing = false; $('play').textContent = 'Play'; } requestAnimationFrame(tick); };
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; if (playing) { audio.play(); tick(); } else audio.pause(); };
+  $('scrub').oninput = e => { audio.currentTime = e.target.value * DURATION; seek(audio.currentTime); $('clock').textContent = audio.currentTime.toFixed(2) + 's'; };
+});
+</script>
+</body>
+</html>

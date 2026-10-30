@@ -1,0 +1,72 @@
+{
+  "bpm": 96,
+  "beatsPerBar": 4,
+  "bars": 15,
+  "fps": 30,
+  "width": 1920,
+  "height": 1080,
+  "tailSeconds": 2.5,
+  "music": { "dropBeats": [11, 43], "stopBeat": 58, "kickFromBar": 4, "grooveFromBar": 4, "fullFromBar": 11,
+             "arpUntilBar": 14, "padGain": 0.26, "clapGain": 0.2 },
+  "events": [
+    { "id": "problem.t1",    "beat": 0,    "sfx": "tick" },
+    { "id": "problem.t2",    "beat": 4,    "sfx": "tick" },
+    { "id": "problem.gaps",  "beat": 6,    "sfx": "click" },
+    { "id": "vial.in",       "beat": 8,    "sfx": "whoosh" },
+
+    { "id": "knock",         "beat": 12,   "sfx": "knock" },
+    { "id": "door.open",     "beat": 13,   "sfx": "whoosh" },
+    { "id": "arrive.t",      "beat": 14,   "sfx": "tick" },
+
+    { "id": "laser.on",      "beat": 16,   "sfx": "click" },
+    { "id": "mark.0",        "beat": 18,   "sfx": "tick" },
+    { "id": "mark.1",        "beat": 18.5, "sfx": "tick" },
+    { "id": "mark.2",        "beat": 19,   "sfx": "tick" },
+    { "id": "mark.3",        "beat": 19.5, "sfx": "tick" },
+    { "id": "laser.t",       "beat": 20,   "sfx": "hit" },
+
+    { "id": "drill.run",     "beat": 24,   "sfx": "drill", "lengthBeats": 2 },
+    { "id": "screw.seat",    "beat": 26,   "sfx": "click" },
+    { "id": "studs.t",       "beat": 25,   "sfx": "tick" },
+
+    { "id": "lift.in",       "beat": 28,   "sfx": "whoosh" },
+    { "id": "lift.drill",    "beat": 30,   "sfx": "drill", "lengthBeats": 1.25 },
+    { "id": "together.t",    "beat": 29,   "sfx": "tick" },
+
+    { "id": "shim",          "beat": 33,   "sfx": "tick" },
+    { "id": "bubble.center", "beat": 34,   "sfx": "chime" },
+    { "id": "square.t",      "beat": 35,   "sfx": "hit" },
+    { "id": "clamp",         "beat": 37,   "sfx": "thud" },
+
+    { "id": "hinge.turn",    "beat": 40,   "sfx": "tick" },
+    { "id": "gaps.even",     "beat": 42,   "sfx": "chime" },
+    { "id": "gaps.t",        "beat": 42.5, "sfx": "tick" },
+
+    { "id": "reveal.in",     "beat": 44,   "sfx": "impact" },
+    { "id": "light.0",       "beat": 46,   "sfx": "click" },
+    { "id": "light.1",       "beat": 46.5, "sfx": "click" },
+    { "id": "light.2",       "beat": 47,   "sfx": "click" },
+    { "id": "light.3",       "beat": 47.5, "sfx": "click" },
+    { "id": "reveal.t",      "beat": 48,   "sfx": "hit" },
+
+    { "id": "close.push",    "beat": 52,   "sfx": "whoosh" },
+    { "id": "close.thud",    "beat": 54,   "sfx": "thud" },
+    { "id": "close.t",       "beat": 54.5, "sfx": "tick" },
+
+    { "id": "end.in",        "beat": 56,   "sfx": "impact" },
+    { "id": "end.cta",       "beat": 57.5, "sfx": "tick" },
+    { "id": "end.final",     "beat": 58,   "sfx": "chime" }
+  ],
+  "sections": [
+    { "id": "problem",  "fromBeat": 0,  "toBeat": 12 },
+    { "id": "arrive",   "fromBeat": 12, "toBeat": 16 },
+    { "id": "laser",    "fromBeat": 16, "toBeat": 24 },
+    { "id": "studs",    "fromBeat": 24, "toBeat": 28 },
+    { "id": "together", "fromBeat": 28, "toBeat": 32 },
+    { "id": "square",   "fromBeat": 32, "toBeat": 40 },
+    { "id": "gaps",     "fromBeat": 40, "toBeat": 44 },
+    { "id": "reveal",   "fromBeat": 44, "toBeat": 52 },
+    { "id": "close",    "fromBeat": 52, "toBeat": 56 },
+    { "id": "end",      "fromBeat": 56, "toBeat": 60 }
+  ]
+}

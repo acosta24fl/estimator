@@ -85,3 +85,25 @@ Typography 8 (fields ~42 px), Composition 7: materials chip collided with the ap
 All categories ≥ 8 → rendered `out/tiktok-onsite.mp4` (1080×1920).
 
 **Next ideas:** a Fish Audio voiceover (TikTok rewards voice); a 3-second loop-friendly ending; burned-in captions for sound-off viewers.
+
+---
+
+# Film 4: cabinet-promo ("Level"), 16:9, 96 BPM, 40 s
+
+## Pass 1
+| Category | Score | Evidence |
+|---|---|---|
+| Brief fidelity | 8 | Story reads shot by shot: crooked DIY job, pro arrives, laser, studs, together, square, gaps, reveal, soft-close, CTA. |
+| Sync | 8 | Knock, drill, laser click, bubble chime, light clicks and soft-close thud land on their frames. |
+| Brand | 8 | Warm greige/white/brass palette held throughout. |
+| Typography | 5 | Kicker labels unreadable; hard-edged scrim rectangle visible behind titles. |
+| Composition | 6 | Black edge on the opening push-in; "Square." collides with the shim. |
+| Motion quality | 6 | Her hands not on the cabinet; drill sparks far from his hand; flat white swinging doors. |
+| Realism | 6 | Textures/lighting/grain good; measurement callouts invisible (white on white); cartoon hand. |
+| Sound | 8 | Peak −1 dBFS. |
+
+**Fixes:** full-frame radial scrim; larger bright kickers; callouts as dark chips with red/green status dots; wall/backsplash bleed past frame; title moved for the shim shot; shaker panel + pull drawn on swinging doors; sculpted hand with tapered finger and knuckles; arms and spark positions corrected.
+
+## Pass 2
+All categories ≥ 8 except human realism (7 - illustrated figures can't read as photographic). Rendered `out/cabinet-promo.mp4`.
+Photoreal path: `cinepipe/examples/cabinet-install` (10 guardrail-validated 16-slot shots for Seedance/Kling).

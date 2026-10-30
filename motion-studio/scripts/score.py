@@ -17,7 +17,8 @@ BEATS_PATH = sys.argv[1] if len(sys.argv) > 1 else os.path.join(STUDIO, "beats.j
 OUT_PATH = sys.argv[2] if len(sys.argv) > 2 else os.path.join(STUDIO, "out", "soundtrack.wav")
 B = json.load(open(BEATS_PATH))
 # arrangement knobs (defaults = the launch film)
-M = {"dropBeats": [15], "stopBeat": 46, "grooveFromBar": 2, "fullFromBar": 4, "arpUntilBar": 11, "padGain": 0.22}
+M = {"dropBeats": [15], "stopBeat": 46, "grooveFromBar": 2, "fullFromBar": 4, "arpUntilBar": 11, "padGain": 0.22,
+     "kickFromBar": 0, "clapGain": 0.35}
 M.update(B.get("music", {}))
 SPB = 60 / B["bpm"]
 TOTAL_BEATS = B["bars"] * B["beatsPerBar"]
@@ -128,7 +129,7 @@ for bar in range(B["bars"]):
             continue
         groove = bar >= M["grooveFromBar"] and beat_no not in M["dropBeats"]
         full = bar >= M["fullFromBar"]
-        if beat_no not in M["dropBeats"]:
+        if beat_no not in M["dropBeats"] and bar >= M["kickFromBar"]:
             place(music, kick(), bt, 0.9 if groove else 0.7)
         if groove:
             place(music, hat(), bt + SPB / 2, 0.25)
@@ -139,7 +140,7 @@ for bar in range(B["bars"]):
             place(music, note(midi(ROOTS[bar % 4]), SPB / 2, "sine", 0.18), bt + SPB / 2, 0.45)
             place(music, note(midi(ROOTS[bar % 4]), SPB / 2, "sine", 0.18), bt, 0.3)
         if full and b in (1, 3):
-            place(music, clap(), bt, 0.35)
+            place(music, clap(), bt, M["clapGain"])
     if M["fullFromBar"] <= bar < M["arpUntilBar"]:
         # arpeggio on 16ths, low-passed
         arp = [m + 12 for m in ch] + [ch[0] + 24]
@@ -214,7 +215,36 @@ def sfx_roll(beats):
     return out
 
 
-GAIN = {"type": 0.18, "hit": 0.55, "impact": 0.8, "tick": 0.25, "click": 0.4, "whoosh": 0.3, "riser": 0.35, "chime": 0.22, "roll": 0.3}
+def sfx_drill(beats):
+    """Cordless drill: motor whine that ramps up, bites, and spins down."""
+    n = int(beats * SPB * SR)
+    x = t(n)
+    up = np.clip(x / 0.12, 0, 1)
+    down = np.clip((x[-1] - x) / 0.15, 0, 1)
+    f = 140 + 180 * up * down
+    ph = 2 * np.pi * np.cumsum(f) / SR
+    motor = sum(np.sin(ph * k) / k for k in range(1, 9)) * 0.5
+    grind = lowpass(noise(n), 3000) * 0.35 * (0.6 + 0.4 * np.sin(2 * np.pi * 23 * x))
+    return lowpass(motor + grind, 5000) * up * down
+
+
+def sfx_knock():
+    n = int(0.6 * SR)
+    out = np.zeros(n)
+    for d in (0.0, 0.22):
+        k = int(0.12 * SR)
+        thump = np.sin(2 * np.pi * 95 * t(k)) * env(k, 0.001, 0.03) + lowpass(noise(k), 900) * env(k, 0.0005, 0.015)
+        place(out, thump, d)
+    return out
+
+
+def sfx_thud():
+    """Soft-close damper: a muted low tap with a short wooden knock."""
+    n = int(0.4 * SR)
+    return np.sin(2 * np.pi * 70 * t(n)) * env(n, 0.004, 0.06) * 0.8 + lowpass(noise(n), 700) * env(n, 0.002, 0.02) * 0.5
+
+
+GAIN = {"drill": 0.32, "knock": 0.7, "thud": 0.8, "type": 0.18, "hit": 0.55, "impact": 0.8, "tick": 0.25, "click": 0.4, "whoosh": 0.3, "riser": 0.35, "chime": 0.22, "roll": 0.3}
 for e in B["events"]:
     kind, at = e["sfx"], e["beat"] * SPB
     if kind == "riser":
@@ -224,13 +254,16 @@ for e in B["events"]:
         sig = np.zeros(int((n16 + 1) * SPB / 4 * SR))
         for k in range(n16):
             place(sig, sfx_tick() * (0.7 + 0.3 * (k % 2)), k * SPB / 4)
+    elif kind == "drill":
+        sig = sfx_drill(e.get("lengthBeats", 1.5))
     elif kind == "roll":
         sig = sfx_roll(e.get("lengthBeats", 2))
     elif kind == "whoosh":
         sig = sfx_whoosh()
         at -= 0.25  # whoosh peaks on the event
     else:
-        sig = {"hit": sfx_hit, "impact": sfx_impact, "tick": sfx_tick, "click": sfx_click, "chime": sfx_chime}[kind]()
+        sig = {"hit": sfx_hit, "impact": sfx_impact, "tick": sfx_tick, "click": sfx_click, "chime": sfx_chime,
+               "knock": sfx_knock, "thud": sfx_thud}[kind]()
     place(sfx, sig, max(at, 0), GAIN[kind])
 
 # ---------- mix ----------

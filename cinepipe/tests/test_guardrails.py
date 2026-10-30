@@ -45,6 +45,16 @@ def test_example_is_clean(bible, cast, plates, shots_data):
     assert shotcaller.check(shots, cast, plates) == []
 
 
+@pytest.mark.parametrize("example", ["handyman", "cabinet-install"])
+def test_all_examples_pass(example):
+    d = EX.parent / example
+    b = StoryBible.model_validate_json((d / "story_bible.json").read_text())
+    c = CastkitRegistry.model_validate_json((d / "castkit_registry.json").read_text())
+    p = ScenecraftPlates.model_validate_json((d / "scenecraft_plates.json").read_text())
+    s = ShotList.model_validate_json((d / "shotcaller_shots.json").read_text())
+    assert castkit.check(b, c) == [] and scenecraft.check(b, p) == [] and shotcaller.check(s, c, p) == []
+
+
 # ---------------- Castkit: 18% gray, panels, face lock
 def castkit_entry(**over):
     base = load("castkit_registry.json")["characters"][0]
