@@ -2,7 +2,7 @@
 // Usage: node motion-studio/scripts/capture-brand.mjs
 import { createRequire } from 'node:module';
 const { chromium } = createRequire(import.meta.url)('playwright');
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import fs from 'node:fs';
 
@@ -14,7 +14,7 @@ fs.mkdirSync(screens, { recursive: true });
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 900, height: 1200 }, deviceScaleFactor: 2 });
-await page.goto('file://' + app);
+await page.goto(pathToFileURL(app).href);
 await page.addStyleTag({ content: "body{font-family:Inter,'Segoe UI',sans-serif}" });
 
 // Sample job: a bathroom tile repair.

@@ -53,7 +53,11 @@ if (flag('--serve')) {
     const out = path.join(studio, 'out'); fs.mkdirSync(out, { recursive: true });
     const wav = path.join(out, 'soundtrack.wav');
     if (!fs.existsSync(wav) || flag('--rescore')) {
-      const r = spawnSync('python3', [path.join(studio, 'scripts', 'score.py')], { stdio: 'inherit' });
+      // Windows usually has `py`/`python`; macOS/Linux have `python3`
+      const score = path.join(studio, 'scripts', 'score.py');
+      const py = ['python3', 'python', 'py'].find(c => spawnSync(c, ['-c', 'import numpy'], { stdio: 'ignore' }).status === 0);
+      if (!py) { console.error('Need Python 3 with numpy (pip install numpy).'); process.exit(1); }
+      const r = spawnSync(py, [score], { stdio: 'inherit' });
       if (r.status !== 0) process.exit(r.status);
     }
     const frames = Math.round(duration * fps);
