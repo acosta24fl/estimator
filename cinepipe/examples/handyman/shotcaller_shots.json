@@ -1,0 +1,191 @@
+{
+  "shots": [
+    {
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 1.8,
+          "end_sec": 3.0,
+          "active_speaker_id": "@Homeowner",
+          "spoken_line": "So... how much?",
+          "silent_listeners_state": "@Handyman mouth closed, still studying the tile"
+        }
+      ],
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH010",
+        "duration_s": 4.0,
+        "fps": 24
+      },
+      "seed": 41207,
+      "slot_03_asset_bindings": [
+        "@Handyman",
+        "@Homeowner",
+        "@Bathroom_Plate"
+      ],
+      "slot_04_shot_scale_framing": "Medium-wide two-shot; @Handyman on the left third facing the cracked tile, @Homeowner entering frame right in the doorway.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T2.8, focus on @Handyman, @Homeowner slightly soft.",
+      "slot_06_camera_rig_motion": "Locked tripod at eye level, no movement.",
+      "slot_07_geometry_spatial_matte": "Foreground: vanity edge. Midground: tile wall with the cracked tile. Background: hallway doorway. Plane locks from @Bathroom_Plate.",
+      "slot_08_character_blocking": "@Handyman stands 1 m from the wall, body three-quarter to camera. @Homeowner stops in the doorway, turned toward him.",
+      "slot_09_wardrobe_lock": "@Handyman: castkit wardrobe_default. @Homeowner: castkit wardrobe_default, mug in both hands.",
+      "slot_10_lighting_key_ratio": "Key: vanity practical 2700K from frame left; fill: window 5600K; ratio 3:1.",
+      "slot_11_atmosphere_volumetrics": "Faint dust drifting through the window beam.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1.5s] @Handyman runs a thumb along the cracked grout.",
+        "[1.5-4s] @Homeowner leans into the doorway and asks her question."
+      ],
+      "slot_13_facial_micro_expressions": "@Handyman: eyes narrow on the crack, slow exhale. @Homeowner: brows up, quick half-smile.",
+      "slot_15_physics_interaction_sim": "Steam from the mug rises and bends in the window draft."
+    },
+    {
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 0.8,
+          "end_sec": 2.4,
+          "active_speaker_id": "@Handyman",
+          "spoken_line": "Let me price it right here.",
+          "silent_listeners_state": "@Homeowner mouth closed, nodding"
+        }
+      ],
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH020",
+        "duration_s": 4.0,
+        "fps": 24
+      },
+      "seed": 41207,
+      "slot_03_asset_bindings": [
+        "@Handyman",
+        "@Homeowner",
+        "@Bathroom_Plate"
+      ],
+      "slot_04_shot_scale_framing": "Medium close-up on @Handyman, @Homeowner out of focus over his shoulder.",
+      "slot_05_camera_optics": "50mm Cooke Panchro, T2.0, shallow depth of field.",
+      "slot_06_camera_rig_motion": "Slow Steadicam push-in, about 10 cm over the shot.",
+      "slot_07_geometry_spatial_matte": "Tile grid fills the background behind his head; doorway sits soft at frame right.",
+      "slot_08_character_blocking": "@Handyman turns from the wall toward camera-right; his right hand reaches to the pouch on his hip.",
+      "slot_09_wardrobe_lock": "@Handyman: castkit wardrobe_default. @Homeowner: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: vanity practical 2700K, now frontal; window fill 5600K; ratio 2:1.",
+      "slot_11_atmosphere_volumetrics": "Soft halation on the bulb behind him.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1.5s] @Handyman turns and meets her eyes.",
+        "[1.5-4s] He pulls out his phone and taps it awake."
+      ],
+      "slot_13_facial_micro_expressions": "Calm, small confident smile, one brow lifts as he speaks.",
+      "slot_15_physics_interaction_sim": "Phone screen glow reflects faintly on his fingers."
+    },
+    {
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH030",
+        "duration_s": 5.0,
+        "fps": 24
+      },
+      "seed": 52931,
+      "slot_03_asset_bindings": [
+        "@Handyman",
+        "@Bathroom_Plate"
+      ],
+      "slot_04_shot_scale_framing": "Extreme close-up insert: both hands holding the phone, screen centered, fills 70% of frame.",
+      "slot_05_camera_optics": "100mm macro look, T4, razor focus on the thumb.",
+      "slot_06_camera_rig_motion": "Handheld-stable on a slider, drifting 2 cm left.",
+      "slot_07_geometry_spatial_matte": "Background reduced to soft tile bokeh; phone plane parallel to sensor.",
+      "slot_08_character_blocking": "Left hand cradles the phone at chest height; right thumb taps the screen.",
+      "slot_09_wardrobe_lock": "@Handyman: castkit wardrobe_default, rolled sleeves visible at the wrists.",
+      "slot_10_lighting_key_ratio": "Key: the phone screen itself, cool blue on the thumb; vanity warmth on the knuckles; ratio 4:1.",
+      "slot_11_atmosphere_volumetrics": "None; clean insert.",
+      "slot_12_timecoded_action_beats": [
+        "[0-2.5s] Thumb taps three fields in a quick rhythm.",
+        "[2.5-4s] Thumb lifts, hovers, presses once firmly.",
+        "[4-5s] Screen brightens as a result appears."
+      ],
+      "slot_13_facial_micro_expressions": "Face out of frame.",
+      "slot_15_physics_interaction_sim": "Screen is a flat neutral blue-grey plate with tracking markers at the corners, replaced in post with the real Estimator UI."
+    },
+    {
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_14_serialized_dialogue_gate": [
+        {
+          "start_sec": 0.4,
+          "end_sec": 2.6,
+          "active_speaker_id": "@Handyman",
+          "spoken_line": "Three options. Standard is thirteen sixty.",
+          "silent_listeners_state": "@Homeowner mouth closed, reading the screen"
+        },
+        {
+          "start_sec": 3.2,
+          "end_sec": 5.4,
+          "active_speaker_id": "@Homeowner",
+          "spoken_line": "Standard works. When can you start?",
+          "silent_listeners_state": "@Handyman mouth closed, small nod"
+        }
+      ],
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH040",
+        "duration_s": 6.0,
+        "fps": 24
+      },
+      "seed": 41207,
+      "slot_03_asset_bindings": [
+        "@Handyman",
+        "@Homeowner",
+        "@Bathroom_Plate"
+      ],
+      "slot_04_shot_scale_framing": "Medium two-shot, 50/50 split; @Handyman left, @Homeowner right, phone between them at center.",
+      "slot_05_camera_optics": "35mm Cooke Panchro, T2.8, both faces in focus.",
+      "slot_06_camera_rig_motion": "Locked tripod, slight 2% digital push in the last second.",
+      "slot_07_geometry_spatial_matte": "Midground pair against the tile wall; cracked tile visible between their shoulders.",
+      "slot_08_character_blocking": "@Handyman turns the phone screen toward her at chest height; @Homeowner steps in to read it.",
+      "slot_09_wardrobe_lock": "@Handyman: castkit wardrobe_default. @Homeowner: castkit wardrobe_default, mug lowered to one hand.",
+      "slot_10_lighting_key_ratio": "Key: vanity 2700K camera-left; phone glow 6500K lights her face from below; ratio 3:1.",
+      "slot_11_atmosphere_volumetrics": "Dust motes catch the window light behind them.",
+      "slot_12_timecoded_action_beats": [
+        "[0-2.8s] He holds out the phone and gives the number.",
+        "[2.8-6s] She reads, her shoulders drop, and she answers."
+      ],
+      "slot_13_facial_micro_expressions": "@Handyman: steady eye contact, mouth relaxed. @Homeowner: eyes dart across the screen, then a full smile.",
+      "slot_15_physics_interaction_sim": "Her sweater sleeve slides as she lowers the mug; coffee surface tilts but doesn't spill."
+    },
+    {
+      "slot_02_render_tier": "480p_preview_draft",
+      "approved_preview_seed": null,
+      "slot_16_negative_constraints": "no simultaneous lip movement, no morphing geometry, no baked directional shadows, no extra limbs or fingers, no camera jitter, no text or logos",
+      "slot_14_serialized_dialogue_gate": [],
+      "slot_01_shot_id_duration": {
+        "shot_id": "SH050",
+        "duration_s": 4.0,
+        "fps": 24
+      },
+      "seed": 60318,
+      "slot_03_asset_bindings": [
+        "@Handyman",
+        "@Homeowner",
+        "@Bathroom_Plate"
+      ],
+      "slot_04_shot_scale_framing": "Close two-shot on the handshake, faces in the top third.",
+      "slot_05_camera_optics": "50mm Cooke Panchro, T2.0, focus on the clasped hands.",
+      "slot_06_camera_rig_motion": "Slow 5-degree arc around the hands, left to right.",
+      "slot_07_geometry_spatial_matte": "Hands in the foreground plane; out-of-focus tiles behind.",
+      "slot_08_character_blocking": "Both face each other in profile; right hands meet at waist height.",
+      "slot_09_wardrobe_lock": "@Handyman: castkit wardrobe_default. @Homeowner: castkit wardrobe_default.",
+      "slot_10_lighting_key_ratio": "Key: window 5600K from behind as a soft edge; vanity fill 2700K; ratio 2:1.",
+      "slot_11_atmosphere_volumetrics": "Gentle haze softens the window highlight.",
+      "slot_12_timecoded_action_beats": [
+        "[0-1.5s] Hands meet and clasp.",
+        "[1.5-3s] Two firm pumps.",
+        "[3-4s] @Handyman nods once; @Homeowner laughs softly."
+      ],
+      "slot_13_facial_micro_expressions": "Both smiling with relief; her eyes crinkle.",
+      "slot_15_physics_interaction_sim": "Shirt fabric creases at the elbow on each pump."
+    }
+  ]
+}

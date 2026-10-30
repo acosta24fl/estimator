@@ -18,7 +18,10 @@ Everything lives in `motion-studio/`. Work from that directory.
 3. **Reference (optional):** if the user gives a reference video, run
    `bash scripts/extract-frames.sh <video>`, read the frames and contact sheet,
    and rewrite the "Visual grammar" part of `STYLE_GUIDE.md`.
-4. **Director's brief:** write `briefs/<slug>.md` with the film in one line,
+4. **Director's brief:** if the user has a CinePipe project
+   (`cinepipe/workspace/<name>/director_brief.md`, made by `cinepipe brief <name>`),
+   start from its logline, character bible and beat sheet - they are already
+   locked and validated. Otherwise write `briefs/<slug>.md` with the film in one line,
    references, characters (if any), tempo, a beat sheet table (bars → shot →
    action → sound), on-screen text (≤6 words each), an optional VO script, and
    "must not". Show the brief to the user and get a yes before writing code.

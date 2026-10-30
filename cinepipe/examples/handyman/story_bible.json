@@ -1,0 +1,105 @@
+{
+  "title": "Price It Before You Leave",
+  "premise": "Ray, a skilled solo handyman, keeps losing jobs and money because he prices from his gut and promises to 'text a number later'. One afternoon in a homeowner's bathroom he prices a tile repair on the spot with the Estimator app, turns his phone around, and closes the job before he leaves the house.",
+  "logline": "A gut-feel handyman who always underquotes must give a nervous homeowner a real price on the spot, before a bigger contractor's polished quote wins the job.",
+  "era": {
+    "timeline": [
+      "Ray Delgado works construction crews for 15 years, then goes solo 3 years ago.",
+      "He wins work on referrals but loses about one in three jobs while he 'figures out a number'.",
+      "Last month he underquoted a deck repair and worked two days for free.",
+      "Today: Linda Park's cracked bathroom tile, with a contractor's quote due tomorrow."
+    ],
+    "era_rules": [
+      "Present day, United States, prices in US dollars.",
+      "Everyone has a smartphone; the Estimator app works offline in a basement with no signal.",
+      "Homeowners compare quotes online and expect a number the same day."
+    ]
+  },
+  "factions": [
+    {
+      "name": "Independent handymen",
+      "goal": "fair pay for skilled work and a full calendar",
+      "power_over": "availability and craft: they can start this week, big contractors can't"
+    },
+    {
+      "name": "Homeowners",
+      "goal": "a fair price they can trust, fast",
+      "power_over": "they pick who gets the job and they talk to their neighbors"
+    },
+    {
+      "name": "Big contractors",
+      "goal": "win every mid-size job in the neighborhood",
+      "power_over": "polished PDF quotes and brand trust that make solo trades look improvised"
+    }
+  ],
+  "world_rules": [
+    "Every price on screen comes from the real Estimator calculation for the sample tile job: materials $331.00, standard price $1,360.87, budget $1,156.74, premium $1,633.04.",
+    "No stopwatches or claims of a specific number of seconds - the film shows speed, it never states it.",
+    "The phone screen always shows the real Estimator UI, composited in post from motion-studio renders.",
+    "Ray never badmouths competitors; he wins by being clear."
+  ],
+  "locations": [
+    {
+      "loc_id": "@Bathroom",
+      "name": "Linda's upstairs bathroom",
+      "visual_motifs": [
+        "one cracked porcelain tile at eye height",
+        "warm vanity bulb against cool window light",
+        "grid lines"
+      ],
+      "color_palette": [
+        "#e8e6e1 off-white tile",
+        "#7d828c grout grey",
+        "#1a1d27 deep shadow",
+        "#4a8cff phone-screen blue"
+      ],
+      "architecture": "1990s suburban bathroom: 30 cm square porcelain wall tile, grey hex floor tile, white vanity, frosted window, single doorway."
+    },
+    {
+      "loc_id": "@Driveway",
+      "name": "Linda's driveway at late afternoon",
+      "visual_motifs": [
+        "white work truck with an open tailgate",
+        "long low-sun shadows",
+        "ladder rack silhouette against the sky"
+      ],
+      "color_palette": [
+        "#f3d9a4 low sun",
+        "#9aa0aa concrete",
+        "#24477a navy",
+        "#ffffff truck white"
+      ],
+      "architecture": "Two-car concrete driveway, beige siding, closed garage door, small lawn edge."
+    }
+  ],
+  "characters": [
+    {
+      "char_id": "@Handyman",
+      "name": "Ray Delgado",
+      "age": 41,
+      "archetype": "The quiet craftsman",
+      "flaw": "Hates paperwork, so he quotes from his gut and underprices his own time.",
+      "want": "To close jobs on the spot at a price that actually pays him.",
+      "vocal_cadence": "Low, unhurried, short sentences; says numbers plainly; never fills silence.",
+      "behavioral_ticks": [
+        "runs a thumb along tile grout when thinking",
+        "taps the phone twice before turning it around",
+        "nods once when a deal is done"
+      ]
+    },
+    {
+      "char_id": "@Homeowner",
+      "name": "Linda Park",
+      "age": 58,
+      "archetype": "The careful client",
+      "flaw": "Assumes anyone without a printed quote is guessing.",
+      "want": "A fair price she understands, today, so she can stop worrying about it.",
+      "vocal_cadence": "Polite, quick, slightly anxious; asks questions that end in a small laugh.",
+      "behavioral_ticks": [
+        "holds her mug with both hands",
+        "leans in to read screens",
+        "relaxes her shoulders when she trusts someone"
+      ]
+    }
+  ]
+}

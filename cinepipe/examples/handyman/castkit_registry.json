@@ -1,0 +1,20 @@
+{
+  "characters": [
+    {
+      "char_id": "@Handyman",
+      "craniofacial_lock": "Square jaw, short dense black beard with grey flecks at the chin, close-cropped dark brown hair greying at the temples, medium-brown skin with sun-weathered texture around the eyes, deep-set dark brown eyes slightly wide-set, thick straight brows, broad nose with a small bump on the bridge, faint 2 cm scar through the left eyebrow, apparent age 41.",
+      "body_lock": "5 ft 11 in, stocky muscular build, broad shoulders, weight on the heels, slightly forward-leaning stance, thick calloused hands.",
+      "wardrobe_default": "navy cotton work shirt with sleeves rolled to the elbow, faded charcoal work jeans, tan leather tool belt with a hammer loop and phone pouch, brown leather work boots, navy baseball cap",
+      "wardrobe_layers": [],
+      "reference_image_paths": []
+    },
+    {
+      "char_id": "@Homeowner",
+      "craniofacial_lock": "Oval face, chin-length straight dark brown bob with a side part, light warm skin with fine smile lines, almond-shaped hazel eyes, softly arched brows, small straight nose, small mole above the right lip, apparent age 58.",
+      "body_lock": "5 ft 5 in, slim build, upright posture, elbows close to the body.",
+      "wardrobe_default": "oversized heather-grey knit sweater, dark indigo straight jeans, white ceramic mug with a blue stripe held as a hand prop",
+      "wardrobe_layers": [],
+      "reference_image_paths": []
+    }
+  ]
+}
