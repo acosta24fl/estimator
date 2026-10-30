@@ -1,0 +1,66 @@
+{
+  "bpm": 128,
+  "beatsPerBar": 4,
+  "bars": 10,
+  "fps": 30,
+  "width": 1080,
+  "height": 1920,
+  "tailSeconds": 1.25,
+  "music": { "dropBeats": [7], "stopBeat": 38, "grooveFromBar": 0, "fullFromBar": 2, "arpUntilBar": 9, "padGain": 0.18 },
+  "events": [
+    { "id": "hook.in",      "beat": 0,     "sfx": "hit" },
+    { "id": "spot.text",    "beat": 4,     "sfx": "hit" },
+    { "id": "think",        "beat": 4,     "sfx": "tick" },
+    { "id": "confident",    "beat": 5,     "sfx": "tick" },
+    { "id": "phone.pull",   "beat": 6,     "sfx": "whoosh" },
+    { "id": "riser",        "beat": 4,     "sfx": "riser", "lengthBeats": 4 },
+
+    { "id": "close.in",     "beat": 8,     "sfx": "impact" },
+    { "id": "m1n.tap",      "beat": 8.25,  "sfx": "click" },
+    { "id": "m1.name",      "beat": 8.5,   "sfx": "type", "lengthBeats": 2 },
+    { "id": "m1c.tap",      "beat": 10.75, "sfx": "click" },
+    { "id": "m1.cost",      "beat": 11,    "sfx": "type", "lengthBeats": 1 },
+    { "id": "m1q.tap",      "beat": 12.75, "sfx": "click" },
+    { "id": "m1.qty",       "beat": 13,    "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "m1.sum",       "beat": 14,    "sfx": "chime" },
+    { "id": "add.tap",      "beat": 15.5,  "sfx": "click" },
+    { "id": "m2n.tap",      "beat": 16,    "sfx": "click" },
+    { "id": "m2.name",      "beat": 16.25, "sfx": "type", "lengthBeats": 1.25 },
+    { "id": "m2c.tap",      "beat": 17.5,  "sfx": "click" },
+    { "id": "m2.cost",      "beat": 17.75, "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "m2q.tap",      "beat": 18.25, "sfx": "click" },
+    { "id": "m2.qty",       "beat": 18.5,  "sfx": "type", "lengthBeats": 0.25 },
+    { "id": "m2.sum",       "beat": 19,    "sfx": "chime" },
+
+    { "id": "labor.swipe",  "beat": 20,    "sfx": "whoosh" },
+    { "id": "rate.tap",     "beat": 20.75, "sfx": "click" },
+    { "id": "labor.rate",   "beat": 21,    "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "hours.tap",    "beat": 21.75, "sfx": "click" },
+    { "id": "labor.hours",  "beat": 22,    "sfx": "type", "lengthBeats": 0.5 },
+    { "id": "gen.swipe",    "beat": 22.5,  "sfx": "whoosh" },
+    { "id": "gen.tap",      "beat": 23.5,  "sfx": "click" },
+
+    { "id": "result.in",    "beat": 24,    "sfx": "impact" },
+    { "id": "rollStart",    "beat": 24.5,  "sfx": "roll", "lengthBeats": 2.5 },
+    { "id": "total",        "beat": 27,    "sfx": "chime" },
+
+    { "id": "turn.in",      "beat": 28,    "sfx": "whoosh" },
+    { "id": "tiers.budget", "beat": 28.5,  "sfx": "hit" },
+    { "id": "tiers.standard","beat": 29,   "sfx": "hit" },
+    { "id": "tiers.premium","beat": 29.5,  "sfx": "hit" },
+    { "id": "tiers.recommend","beat": 30.5,"sfx": "chime" },
+    { "id": "pleased",      "beat": 31,    "sfx": "tick" },
+    { "id": "handshake",    "beat": 32,    "sfx": "hit" },
+    { "id": "caption",      "beat": 33,    "sfx": "tick" },
+
+    { "id": "end.in",       "beat": 36,    "sfx": "impact" },
+    { "id": "end.sub",      "beat": 37,    "sfx": "tick" },
+    { "id": "end.final",    "beat": 38,    "sfx": "hit" }
+  ],
+  "sections": [
+    { "id": "wide",  "fromBeat": 0,  "toBeat": 8 },
+    { "id": "phone", "fromBeat": 8,  "toBeat": 28 },
+    { "id": "turn",  "fromBeat": 28, "toBeat": 36 },
+    { "id": "end",   "fromBeat": 36, "toBeat": 40 }
+  ]
+}

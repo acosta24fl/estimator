@@ -58,3 +58,30 @@ Motion quality 8: subtotal lands $331 at 9.1 s and holds. Cursor hits Generate E
 All categories ≥ 8 → rendered `out/fast-materials.mp4`.
 
 **Next ideas:** a vertical 9:16 cut for Reels/TikTok; a VO via Fish Audio; a different sample job (drywall, deck).
+
+---
+
+# Film 3: tiktok-onsite ("Quote it before you leave"), 9:16, 128 BPM, 20 s
+
+## Pass 1
+| Category | Score | Evidence |
+|---|---|---|
+| Brief fidelity | 8 | All beats present: hook bubble on frame 1, phone pull, typing, tap, turn, handshake. |
+| Sync | 8 | Every tap lands on its click; typing ticks on 16ths. |
+| Brand | 9 | App rebuilt with the real CSS (mobile layout); all numbers real. |
+| Typography | 5 | Phone UI too small to read on a phone (~28 px text). |
+| Composition | 5 | Caption wraps into the tier cards; cards crowd the handyman's head. |
+| Motion quality | 6 | Thumb too fat and covers the fields; crack reads as an "X" close icon. |
+| Banned list | 10 | None. |
+| Sound | 8 | Peak −1 dBFS. |
+
+**Fixes:** camera zooms 1.5× onto the fields being typed, then 1.35× onto labor, then out for the result; slimmer thumb on an unscaled layer; larger crack at the handyman's eye line; caption on two lines; cards moved down and characters framed lower.
+
+## Pass 2
+Typography 8 (fields ~42 px), Composition 7: materials chip collided with the app subtitle.
+**Fix:** moved the zoom origin so the app header leaves the frame, and gave the chip a solid fade.
+
+## Pass 3
+All categories ≥ 8 → rendered `out/tiktok-onsite.mp4` (1080×1920).
+
+**Next ideas:** a Fish Audio voiceover (TikTok rewards voice); a 3-second loop-friendly ending; burned-in captions for sound-off viewers.

@@ -40,7 +40,8 @@ if (flag('--serve')) {
 } else {
   const stillsEvery = flag('--stills') ? parseFloat(flag('--stills')) : null;
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+  const dims = JSON.parse(fs.readFileSync(beatsPath, 'utf8'));
+  const page = await browser.newPage({ viewport: { width: dims.width || 1920, height: dims.height || 1080 } });
   page.on('pageerror', e => { console.error('Composition error:', e.message); process.exit(1); });
   await page.goto(`${base}/${pagePath}?render`);
   const { duration, fps } = await page.evaluate(() => window.ready);

@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Quote It On The Spot</title>
+<style>
+  :root {
+    --bg: #0f1117; --surface: #1a1d27; --deep: #12141c; --border: #2a2d3a;
+    --text: #e0e0e0; --strong: #fff; --muted: #888; --accent: #4a8cff;
+    --accent-soft: #7eb8ff; --money: #4aff8c; --warn: #ffaa4a;
+    --display: 'Inter Display', Inter, 'Segoe UI', sans-serif;
+    --body: Inter, 'Segoe UI', sans-serif; --mono: 'JetBrains Mono', ui-monospace, monospace;
+    /* character-only palette (brief: palette exception) */
+    --skin: #a8735a; --skin-dark: #8e5f49; --beard: #3b2a20; --shirt: #24477a; --shirt-dark: #1b365e;
+    --cap: #1d3a66; --pants: #2b3550; --belt: #7a5230; --boot: #3b2a20;
+    --c-skin: #e3b896; --c-hair: #4a3426; --c-sweater: #7d828c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: #000; overflow: hidden; }
+  #stage { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: var(--bg);
+    color: var(--text); font-family: var(--body); transform-origin: 0 0; }
+  .layer { position: absolute; inset: 0; display: none; }
+  .abs { position: absolute; }
+  .headline { font-family: var(--display); font-weight: 800; letter-spacing: -0.035em; color: var(--strong); line-height: 1.0; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .mask { overflow: hidden; padding-bottom: 0.1em; }
+  .mask > span { display: inline-block; }
+  #world { transform-origin: 540px 0; }
+  #world svg { position: absolute; inset: 0; }
+
+  /* phone */
+  #phone { position: absolute; left: 160px; top: 330px; width: 760px; height: 1560px; border-radius: 96px;
+    background: #05060a; box-shadow: 0 0 0 6px #2a2d3a, 0 80px 120px -40px #000; }
+  #screen { position: absolute; inset: 22px; border-radius: 76px; overflow: hidden; background: #0f1117; }
+  #island { position: absolute; top: 22px; left: 50%; width: 190px; height: 50px; margin-left: -95px; border-radius: 25px; background: #000; z-index: 2; }
+  #app { position: absolute; left: 0; top: 0; width: 390px; transform-origin: 0 0; padding: 60px 20px 20px; }
+
+  /* app CSS (values from index.html, mobile layout) */
+  #app h1 { text-align: center; font-size: 2rem; margin-bottom: 8px; color: #fff; line-height: 1.15; }
+  #app .subtitle { text-align: center; color: #888; margin-bottom: 30px; font-size: 0.95rem; }
+  .section { background: #1a1d27; border: 1px solid #2a2d3a; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+  .section h2 { font-size: 1.15rem; margin-bottom: 16px; color: #7eb8ff; display: flex; align-items: center; gap: 8px; }
+  .section h2 .icon { font-size: 1.3rem; font-family: 'Noto Color Emoji', sans-serif; }
+  .field { background: #12141c; border: 1px solid #333; border-radius: 8px; padding: 10px 12px; color: #e0e0e0;
+    font-size: 0.95rem; height: 39px; white-space: nowrap; overflow: hidden; }
+  .field.focus { border-color: #7eb8ff; }
+  .field .ph { color: #757575; }
+  .caret { display: inline-block; width: 1.5px; height: 1.1em; background: #e0e0e0; vertical-align: -0.15em; margin-left: 1px; }
+  .materials-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+  .material-row { display: flex; gap: 8px; align-items: center; }
+  .material-row .field:nth-child(1) { flex: 2; } .material-row .field:nth-child(2) { flex: 1; } .material-row .field:nth-child(3) { flex: 0.6; }
+  .rm { background: #ff4d4d; color: #fff; width: 32px; height: 32px; border-radius: 6px; flex-shrink: 0; display: grid; place-items: center; font-size: 1.1rem; }
+  .btn-add { display: inline-block; padding: 10px 18px; border-radius: 8px; font-size: 0.9rem; font-weight: 600;
+    background: #2a3a50; color: #7eb8ff; border: 1px dashed #7eb8ff55; }
+  .form-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+  .form-group label { display: block; font-size: 0.85rem; color: #aaa; margin-bottom: 6px; }
+  .btn-calculate { margin: 10px 0 20px; background: linear-gradient(135deg, #4a8cff, #2a5cbd); color: #fff; font-size: 1.1rem;
+    font-weight: 600; padding: 14px 32px; border-radius: 10px; text-align: center; }
+  .result-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #2a2d3a; font-size: 0.95rem; gap: 10px; }
+  .result-row .label { color: #aaa; } .result-row .value { color: #fff; font-weight: 600; white-space: nowrap; }
+  .result-row.total { font-size: 1.3rem; padding-top: 16px; border-top: 2px solid #4a8cff; border-bottom: none; margin-top: 8px; }
+  .result-row.total .value { color: #4aff8c; }
+
+  /* overlays */
+  .chip-label { font-size: 30px; letter-spacing: 0.16em; font-weight: 700; color: var(--muted); }
+  .tier { position: absolute; left: 70px; width: 850px; height: 132px; border-radius: 22px; background: var(--deep);
+    border: 2px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 40px;
+    box-shadow: 0 30px 60px -20px #000; }
+  .tier h3 { font-size: 44px; font-weight: 700; color: #ccc; }
+  .tier .desc { font-size: 24px; color: #777; margin-top: 4px; }
+  .tier .price { font-size: 60px; font-weight: 700; color: var(--strong); letter-spacing: -0.02em; }
+  .tier .tag { position: absolute; top: -20px; left: 40px; background: var(--accent); color: #fff; font-weight: 700;
+    font-size: 20px; letter-spacing: 0.12em; padding: 8px 16px; border-radius: 8px; }
+  #flash { position: absolute; inset: 0; background: var(--accent); opacity: 0; pointer-events: none; }
+  #vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 45%, transparent 55%, #000000a0 100%); }
+  #grain { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.06; mix-blend-mode: overlay; pointer-events: none; }
+  #fadeout { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+  #controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 10px 16px;
+    background: #000c; color: #ddd; font: 14px Inter, sans-serif; z-index: 10; }
+  #controls input[type=range] { flex: 1; }
+  #controls button { background: #4a8cff; color: #fff; border: 0; border-radius: 6px; padding: 6px 14px; font-weight: 600; cursor: pointer; }
+  body.render #controls { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- ============ WORLD: bathroom + characters (wide + turn shots) ============ -->
+  <div class="layer" id="world">
+    <svg viewBox="0 0 1080 1920" width="1080" height="1920">
+      <defs>
+        <pattern id="tiles" width="120" height="120" patternUnits="userSpaceOnUse">
+          <rect width="120" height="120" fill="#1a1d27"/><path d="M0 0H120M0 0V120" stroke="#2a2d3a" stroke-width="4"/>
+        </pattern>
+        <pattern id="floor" width="160" height="160" patternUnits="userSpaceOnUse">
+          <rect width="160" height="160" fill="#12141c"/><path d="M0 0H160M0 0V160" stroke="#1d2029" stroke-width="4"/>
+        </pattern>
+        <radialGradient id="lamp" cx="0.45" cy="0.3" r="0.7"><stop offset="0" stop-color="#7eb8ff" stop-opacity="0.10"/><stop offset="1" stop-color="#7eb8ff" stop-opacity="0"/></radialGradient>
+      </defs>
+      <rect width="1080" height="1560" fill="url(#tiles)"/>
+      <rect y="1560" width="1080" height="360" fill="url(#floor)"/>
+      <rect y="1548" width="1080" height="16" fill="#2a2d3a"/>
+      <rect width="1080" height="1920" fill="url(#lamp)"/>
+      <!-- cracked tile -->
+      <g id="crack" transform="translate(0 600)">
+        <rect x="0" y="0" width="240" height="240" fill="#1e212c"/>
+        <rect x="0" y="0" width="240" height="240" fill="none" stroke="#2a2d3a" stroke-width="4"/>
+        <path d="M30 22 L92 96 L78 140 L140 168 L176 226 M92 96 L160 72 L214 90 M78 140 L36 196 M140 168 L196 150" stroke="#0a0b10" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M30 22 L92 96 L78 140 L140 168 L176 226 M92 96 L160 72 L214 90 M78 140 L36 196 M140 168 L196 150" stroke="#ffaa4a" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+        <path d="M128 162 l18 6 l-6 14 z M60 120 l12 4 l-4 10 z" fill="#2a2d3a"/>
+      </g>
+      <ellipse cx="410" cy="1790" rx="200" ry="26" fill="#000" opacity="0.35"/>
+
+      <!-- handyman -->
+      <g id="hm">
+        <g id="hm-body">
+          <rect x="330" y="1720" width="80" height="62" rx="20" fill="var(--boot)"/>
+          <rect x="425" y="1720" width="80" height="62" rx="20" fill="var(--boot)"/>
+          <rect x="338" y="1290" width="62" height="450" rx="26" fill="var(--pants)"/>
+          <rect x="428" y="1290" width="62" height="450" rx="26" fill="var(--pants)"/>
+          <rect x="298" y="870" width="226" height="450" rx="70" fill="var(--shirt)"/>
+          <path d="M370 880 L410 960 L450 880" fill="none" stroke="var(--shirt-dark)" stroke-width="10" stroke-linejoin="round"/>
+          <rect x="294" y="1262" width="234" height="50" rx="12" fill="var(--belt)"/>
+          <rect x="398" y="1270" width="30" height="34" rx="6" fill="none" stroke="#c9a46a" stroke-width="6"/>
+          <rect x="452" y="1290" width="74" height="96" rx="14" fill="#6a4527"/>
+          <rect x="314" y="1296" width="16" height="130" rx="6" fill="#c08a50"/>
+          <rect x="292" y="1290" width="60" height="24" rx="6" fill="#9aa0aa"/>
+        </g>
+        <!-- right arm (viewer left), hangs -->
+        <g id="hm-armR">
+          <rect x="262" y="890" width="66" height="190" rx="33" fill="var(--shirt)"/>
+          <rect x="270" y="1050" width="50" height="160" rx="25" fill="var(--skin)"/>
+          <circle cx="295" cy="1222" r="32" fill="var(--skin)"/>
+        </g>
+        <!-- head -->
+        <g id="hm-head">
+          <rect x="384" y="810" width="54" height="80" rx="20" fill="var(--skin-dark)"/>
+          <circle cx="312" cy="752" r="24" fill="var(--skin-dark)"/>
+          <circle cx="410" cy="742" r="106" fill="var(--skin)"/>
+          <path d="M318 760 Q318 870 412 874 Q506 870 506 760 Q478 802 412 802 Q346 802 318 760Z" fill="var(--beard)"/>
+          <path id="hm-mouth" d="M386 822 L438 822" stroke="#2a1d16" stroke-width="7" fill="none" stroke-linecap="round"/>
+          <path d="M440 750 Q462 776 446 790" stroke="var(--skin-dark)" stroke-width="7" fill="none" stroke-linecap="round"/>
+          <g id="hm-eyes">
+            <ellipse cx="382" cy="738" rx="10" ry="12" fill="#1a1410"/>
+            <ellipse cx="462" cy="738" rx="10" ry="12" fill="#1a1410"/>
+          </g>
+          <rect id="hm-browL" x="364" y="704" width="38" height="9" rx="4.5" fill="var(--beard)"/>
+          <rect id="hm-browR" x="444" y="704" width="38" height="9" rx="4.5" fill="var(--beard)"/>
+          <path d="M300 702 Q304 608 410 604 Q516 608 520 702 Z" fill="var(--cap)"/>
+          <path d="M430 692 Q510 684 576 706 Q512 720 430 712 Z" fill="var(--shirt-dark)"/>
+          <circle cx="410" cy="608" r="9" fill="var(--shirt-dark)"/>
+        </g>
+        <!-- left arm (viewer right): upper arm pivots at shoulder, forearm at elbow -->
+        <g id="hm-armL">
+          <rect x="494" y="890" width="66" height="190" rx="33" fill="var(--shirt)"/>
+          <g id="hm-foreL">
+            <rect x="502" y="1050" width="50" height="160" rx="25" fill="var(--skin)"/>
+            <g id="hm-phone" opacity="0">
+              <rect x="486" y="1170" width="82" height="150" rx="16" fill="#05060a" stroke="#2a2d3a" stroke-width="4"/>
+              <rect id="hm-phone-glow" x="493" y="1178" width="68" height="134" rx="11" fill="#4a8cff" opacity="0.35"/>
+              <circle id="hm-phone-cam" cx="508" cy="1194" r="7" fill="#2a2d3a" opacity="0"/>
+            </g>
+            <circle cx="527" cy="1222" r="32" fill="var(--skin)"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- customer (right edge, shoulders up) -->
+      <g id="cu">
+        <path d="M850 1120 Q860 1010 960 1000 Q1080 1000 1110 1060 L1110 1920 L850 1920 Z" fill="var(--c-sweater)"/>
+        <g id="cu-arm">
+          <rect x="980" y="1080" width="60" height="220" rx="30" fill="#6e737c" transform="rotate(35 1010 1090)"/>
+          <circle id="cu-hand" cx="870" cy="1250" r="30" fill="var(--c-skin)"/>
+        </g>
+        <g id="cu-mug">
+          <rect x="878" y="1120" width="72" height="86" rx="12" fill="#e0e0e0"/>
+          <path d="M950 1140 Q980 1150 950 1180" stroke="#e0e0e0" stroke-width="10" fill="none"/>
+          <rect x="878" y="1140" width="72" height="16" fill="#4a8cff"/>
+        </g>
+        <rect x="930" y="930" width="50" height="80" rx="20" fill="#c99f80"/>
+        <g id="cu-head">
+          <circle cx="958" cy="860" r="92" fill="var(--c-skin)"/>
+          <path d="M866 860 Q860 760 960 756 Q1060 760 1052 870 Q1040 812 980 806 Q920 808 900 840 Q884 870 866 860Z" fill="var(--c-hair)"/>
+          <g id="cu-eyes"><ellipse cx="910" cy="860" rx="8" ry="10" fill="#1a1410"/><ellipse cx="966" cy="860" rx="8" ry="10" fill="#1a1410"/></g>
+          <rect id="cu-browL" x="896" y="830" width="30" height="7" rx="3.5" fill="var(--c-hair)"/>
+          <rect id="cu-browR" x="952" y="830" width="30" height="7" rx="3.5" fill="var(--c-hair)"/>
+          <path id="cu-mouth" d="M922 910 Q936 922 950 910" stroke="#5a2d22" stroke-width="6" fill="none" stroke-linecap="round"/>
+        </g>
+      </g>
+    </svg>
+  </div>
+
+  <!-- hook bubble + text (wide) -->
+  <div class="layer" id="wide-ui">
+    <div class="abs" id="bubble" style="left:330px; top:440px; transform-origin: 85% 120%">
+      <div style="background:#fff; color:#0f1117; border-radius:44px; padding:36px 50px; font-family:var(--display); font-weight:800; font-size:76px; letter-spacing:-0.03em; white-space:nowrap">So… how much?</div>
+      <svg width="80" height="70" style="position:absolute; right:70px; bottom:-60px"><path d="M0 0 L80 0 L60 70 Z" fill="#fff"/></svg>
+    </div>
+    <div class="abs" id="spot" style="left:80px; top:200px">
+      <div class="mask"><span class="headline" style="font-size:132px">Quote it</span></div>
+      <div class="mask"><span class="headline" style="font-size:132px">on the <span style="color:var(--money)">spot.</span></span></div>
+    </div>
+  </div>
+
+  <!-- ============ PHONE CLOSE-UP ============ -->
+  <div class="layer" id="phone-layer">
+    <div id="phone-cam" class="abs" style="inset:0; transform-origin: 0 0">
+      <svg class="abs" style="inset:0" viewBox="0 0 1080 1920" width="1080" height="1920">
+        <!-- holding hand behind the phone -->
+        <rect x="40" y="1640" width="380" height="400" rx="120" fill="var(--shirt)"/>
+        <ellipse cx="300" cy="1700" rx="230" ry="190" fill="var(--skin)"/>
+      </svg>
+      <div id="phone"><div id="screen"><div id="island"></div><div id="app">
+        <h1>Job Estimate Generator</h1>
+        <p class="subtitle">Enter your job details below to calculate what you should charge</p>
+        <div class="section">
+          <h2><span class="icon">📦</span> Materials</h2>
+          <div class="materials-list">
+            <div class="material-row"><div class="field" id="m1-name"></div><div class="field" id="m1-cost"></div><div class="field" id="m1-qty"></div><div class="rm">×</div></div>
+            <div class="material-row" id="row2" style="overflow:hidden"><div class="field" id="m2-name"></div><div class="field" id="m2-cost"></div><div class="field" id="m2-qty"></div><div class="rm">×</div></div>
+          </div>
+          <div class="btn-add" id="btn-add">+ Add Material</div>
+        </div>
+        <div class="section" id="sec-labor">
+          <h2><span class="icon">✍</span> Labor</h2>
+          <div class="form-grid">
+            <div class="form-group"><label>Your Hourly Rate ($)</label><div class="field" id="l-rate"></div></div>
+            <div class="form-group"><label>Estimated Hours</label><div class="field" id="l-hours"></div></div>
+            <div class="form-group"><label>Skill Level Compared to Pro</label><div class="field">Professional (100%)</div></div>
+            <div class="form-group"><label>Number of Workers (including you)</label><div class="field">1</div></div>
+          </div>
+        </div>
+        <div class="section">
+          <h2><span class="icon">🚗</span> Travel &amp; Expenses</h2>
+          <div class="form-grid">
+            <div class="form-group"><label>Round-Trip Distance (miles)</label><div class="field">34</div></div>
+            <div class="form-group"><label>Mileage Rate ($/mile)</label><div class="field">0.67</div></div>
+            <div class="form-group"><label>Food / Meals ($)</label><div class="field">18</div></div>
+          </div>
+        </div>
+        <div class="section">
+          <h2><span class="icon">📈</span> Overhead &amp; Profit</h2>
+          <div class="form-grid">
+            <div class="form-group"><label>Overhead / Insurance / Tools (%)</label><div class="field">10</div></div>
+            <div class="form-group"><label>Desired Profit Margin (%)</label><div class="field">20</div></div>
+          </div>
+        </div>
+        <div class="btn-calculate" id="gen-btn">Generate Estimate</div>
+        <div class="section" id="sec-results" style="display:none">
+          <h2><span class="icon">💰</span> Cost Breakdown</h2>
+          <div id="breakdown"></div>
+        </div>
+      </div></div></div>
+      <svg class="abs" style="inset:0; pointer-events:none" viewBox="0 0 1080 1920" width="1080" height="1920">
+        <!-- fingers wrapping the right edge -->
+        <rect x="880" y="1180" width="96" height="70" rx="35" fill="var(--skin)"/>
+        <rect x="886" y="1290" width="92" height="70" rx="35" fill="var(--skin)"/>
+        <rect x="880" y="1400" width="90" height="66" rx="33" fill="var(--skin)"/>
+        <!-- left thumb on the left edge -->
+        <rect x="120" y="1420" width="90" height="190" rx="45" fill="var(--skin)" transform="rotate(-18 165 1515)"/>
+      </svg>
+    </div>
+    <svg class="abs" style="inset:0; pointer-events:none" viewBox="0 0 1080 1920" width="1080" height="1920">
+      <!-- tapping thumb (outside the zoomed camera): tip at (0,0), drawn up-left from bottom-right -->
+      <g id="thumb">
+        <g transform="rotate(-38)">
+          <rect x="-42" y="-10" width="84" height="460" rx="42" fill="var(--skin)"/>
+          <ellipse cx="0" cy="30" rx="25" ry="33" fill="#c08e75"/>
+        </g>
+        <circle cx="320" cy="470" r="170" fill="var(--skin)"/>
+        <rect x="300" y="520" width="420" height="500" rx="120" fill="var(--shirt)"/>
+      </g>
+    </svg>
+    <div class="abs" style="left:0; right:0; top:0; height:470px; background:linear-gradient(#0f1117 72%, #0f111700)" id="chip-bg"></div>
+    <div class="abs" id="chip" style="left:80px; right:140px; top:170px; text-align:right">
+      <div class="chip-label" id="chip-label">MATERIALS</div>
+      <div class="mono" id="chip-v" style="font-size:96px; font-weight:700; color:var(--strong); line-height:1.05">$0.00</div>
+    </div>
+  </div>
+
+  <!-- tiers + caption (turn) -->
+  <div class="layer" id="turn-ui">
+    <div class="abs mask" id="caption" style="left:60px; right:140px; top:170px">
+<span class="headline" style="font-size:88px">Three prices.<br><span style="color:var(--accent-soft)">No guessing.</span></span>
+    </div>
+    <div id="tiers"></div>
+  </div>
+
+  <!-- end card -->
+  <div class="layer" id="end">
+    <div class="grid-bg"></div>
+    <img id="end-icon" class="abs" src="../../brand/icon-512.png" style="width:200px;height:200px;left:440px;top:520px;border-radius:46px">
+    <div class="abs" id="end-line" style="left:0; right:0; top:800px; text-align:center">
+      <div class="mask"><span class="headline" style="font-size:128px">Quote it before</span></div>
+      <div class="mask"><span class="headline" style="font-size:128px">you <span style="color:var(--money)">leave.</span></span></div>
+    </div>
+    <div class="abs" id="end-sub" style="left:0; right:0; top:1110px; text-align:center; font-size:48px; color:var(--muted); font-weight:500">
+      Free <span style="color:#444">·</span> Works offline
+    </div>
+  </div>
+
+  <div id="flash"></div>
+  <div id="vignette"></div>
+  <canvas id="grain" width="270" height="480"></canvas>
+  <div id="fadeout"></div>
+</div>
+
+<div id="controls">
+  <button id="play">Play</button>
+  <input id="scrub" type="range" min="0" max="1" step="0.001" value="0">
+  <span id="clock">0.00s</span>
+</div>
+
+<script>
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const E = {
+  expoOut: p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p),
+  expoIn: p => p <= 0 ? 0 : Math.pow(2, 10 * p - 10),
+  expoInOut: p => p <= 0 ? 0 : p >= 1 ? 1 : p < .5 ? Math.pow(2, 20 * p - 10) / 2 : (2 - Math.pow(2, -20 * p + 10)) / 2,
+  backOut: (p, s = 1.35) => 1 + (s + 1) * Math.pow(p - 1, 3) + s * Math.pow(p - 1, 2),
+  sineInOut: p => -(Math.cos(Math.PI * p) - 1) / 2,
+};
+const $ = id => document.getElementById(id);
+const money = n => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const parseMoney = s => parseFloat(s.replace(/[$,]/g, ''));
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+let BEATS, EST, SPB, DURATION;
+const beat = n => n * SPB;
+const LEAD = 0.1;
+const event = id => { const e = BEATS.events.find(e => e.id === id); if (!e) throw new Error('unknown event ' + id); return e; };
+const evExact = id => beat(event(id).beat);
+const ev = id => evExact(id) - LEAD;
+const P = (t, start, beats, ease = E.expoOut) => ease(clamp((t - start) / beat(beats)));
+const rot = (el, a, cx, cy) => el.setAttribute('transform', `rotate(${a} ${cx} ${cy})`);
+
+// sample job (brand/sample-estimate.json: materials $331, standard $1,360.87)
+const JOB = { m1: ['Porcelain tile', '4.25', '60'], m2: ['Thinset + grout', '38', '2'], rate: '45', hours: '10' };
+const PH = { name: 'Material name', cost: 'Unit cost ($)', qty: 'Qty' };
+const APP_SCALE = 716 / 390;
+
+function typed(t, id, text) {
+  const s = evExact(id), len = beat(event(id).lengthBeats || 1);
+  return text.slice(0, Math.floor(clamp((t - s) / len) * text.length + 1e-6));
+}
+function field(el, value, placeholder, focus, t) {
+  const blink = Math.floor(t * 3.2) % 2 === 0;
+  el.classList.toggle('focus', focus);
+  el.innerHTML = (value || '') + (focus && blink ? '<span class="caret"></span>' : '') + (!value ? `<span class="ph">${placeholder}</span>` : '');
+}
+// stage-space centre of an element (undoes the preview fit-scale)
+function centre(el, fx = 0.5, fy = 0.5) {
+  const st = $('stage').getBoundingClientRect(), r = el.getBoundingClientRect(), k = st.width / 1080;
+  return { x: (r.left + r.width * fx - st.left) / k, y: (r.top + r.height * fy - st.top) / k };
+}
+
+// ---------- characters ----------
+function handyman(t, mood) {
+  const breathe = Math.sin(t * 2.4) * 0.006;
+  $('hm-body').setAttribute('transform', `translate(0 ${-breathe * 300})`);
+  const blink = (t % 2.7) < 0.1 ? 0.12 : 1;
+  const look = { wall: [-11, 0], think: [2, -9], confident: [6, 0], customer: [9, 2], phone: [4, 8] }[mood.look] || [0, 0];
+  $('hm-eyes').setAttribute('transform', `translate(${look[0]} ${look[1]}) translate(0 738) scale(1 ${blink}) translate(0 -738)`);
+  $('hm-browR').setAttribute('transform', `translate(0 ${mood.brow ? -14 : 0})`);
+  $('hm-browL').setAttribute('transform', `translate(0 ${mood.think ? -8 : 0})`);
+  $('hm-mouth').setAttribute('d', mood.smile ? 'M380 812 Q412 840 444 812' : mood.think ? 'M388 824 Q400 818 412 824 Q424 830 436 824' : 'M386 822 L438 822');
+  $('hm-head').setAttribute('transform', `rotate(${mood.tilt || 0} 410 860) translate(0 ${-breathe * 300})`);
+}
+function customer(t, mood) {
+  const blink = ((t + 1.1) % 3.1) < 0.1 ? 0.12 : 1;
+  $('cu-eyes').setAttribute('transform', `translate(${mood.look ? mood.look[0] : 0} ${mood.look ? mood.look[1] : 0}) translate(0 860) scale(1 ${blink}) translate(0 -860)`);
+  const up = mood.ask ? -12 : 0;
+  $('cu-browL').setAttribute('transform', `translate(0 ${up})`); $('cu-browR').setAttribute('transform', `translate(0 ${up})`);
+  $('cu-mouth').setAttribute('d', mood.pleased ? 'M912 902 Q938 930 964 902' : mood.ask ? 'M928 912 Q936 900 944 912 Q936 924 928 912' : 'M922 910 Q936 916 950 910');
+  $('cu-head').setAttribute('transform', `rotate(${mood.nod || 0} 958 950)`);
+}
+
+const scenes = {
+  wide(t, s0, s1) {
+    $('world').style.display = $('wide-ui').style.display = 'block';
+    // slow push-in toward the handyman
+    const push = E.sineInOut(clamp((t - s0) / (s1 - s0)));
+    $('world').style.transform = `translate(${lerp(0, 40, push)}px, ${lerp(0, -60, push)}px) scale(${lerp(1, 1.08, push)})`;
+    const lean = P(t, -0.3, 1);
+    $('cu').setAttribute('transform', `translate(${lerp(160, 0, lean)} 0)`);
+    customer(t, { ask: t < ev('spot.text'), look: [-10, 0] });
+
+    const think = t >= ev('think'), conf = t >= ev('confident');
+    handyman(t, conf ? { look: 'confident', smile: true, brow: true, tilt: 2 }
+               : think ? { look: 'think', think: true, tilt: -3 } : { look: 'wall', tilt: -4 });
+
+    // phone pull on beat 6: hand into pouch, then bend the arm to raise the phone
+    const pull = P(t, ev('phone.pull'), 1.4, E.expoInOut);
+    rot($('hm-armL'), lerp(0, 22, pull), 527, 905);
+    rot($('hm-foreL'), lerp(0, 118, pull), 527, 1060);
+    $('hm-phone').setAttribute('opacity', t >= ev('phone.pull') ? 1 : 0);
+    rot($('hm-armR'), Math.sin(t * 2.4) * 1.5, 295, 905);
+
+    // bubble pops on frame 1, gone when the text lands
+    const b = clamp((t + 0.2) / beat(0.6));
+    const out = P(t, ev('spot.text') - beat(0.25), 0.3, E.expoIn);
+    $('bubble').style.opacity = (1 - out);
+    $('bubble').style.transform = `scale(${lerp(0.6, 1, E.backOut(b, 1.6)) * (1 - 0.2 * out)})`;
+    [...$('spot').children].forEach((m, i) => {
+      const p = P(t, ev('spot.text') + beat(i * 0.25), 1.2);
+      m.firstElementChild.style.transform = `translateY(${lerp(110, 0, p)}%)`;
+    });
+  },
+
+  phone(t, s0, s1) {
+    $('phone-layer').style.display = 'block';
+    const enter = P(t, ev('close.in'), 1.5);
+    const drift = clamp((t - s0) / (s1 - s0));
+    const app = $('app');
+    const z1 = P(t, ev('labor.swipe'), 0.8, E.expoInOut), z2 = P(t, ev('gen.swipe'), 0.8, E.expoInOut);
+    // zoom: materials (1.5x) -> labor fields (1.35x) -> whole phone
+    const zoom = lerp(lerp(1.5, 1.35, z1), 1, z2) * lerp(1, 1.03, drift);
+    const ox = 540, oy = lerp(lerp(1250, 760, z1), 960, z2);
+    $('phone-cam').style.transform = `translate(0px, ${lerp(260, 0, enter)}px) translate(${ox}px, ${oy}px) scale(${zoom * lerp(1.2, 1, enter)}) rotate(${lerp(-4, 0, enter)}deg) translate(${-ox}px, ${-oy}px)`;
+    $('chip-bg').style.opacity = 1 - z2;
+
+    // ---- fields ----
+    const before = (id, d = 0) => t < evExact(id) + beat(d);
+    const n1 = typed(t, 'm1.name', JOB.m1[0]), c1 = typed(t, 'm1.cost', JOB.m1[1]);
+    const q1 = before('m1.qty') ? '1' : typed(t, 'm1.qty', JOB.m1[2]);
+    const f1 = before('m1n.tap') ? -1 : before('m1c.tap') ? 0 : before('m1q.tap') ? 1 : before('add.tap') ? 2 : -1;
+    field($('m1-name'), n1, PH.name, f1 === 0, t);
+    field($('m1-cost'), c1, PH.cost, f1 === 1, t);
+    field($('m1-qty'), q1, PH.qty, f1 === 2, t);
+    const grow = P(t, ev('add.tap'), 0.5);
+    $('row2').style.display = t >= ev('add.tap') ? 'flex' : 'none';
+    $('row2').style.height = (39 * grow) + 'px';
+    const n2 = typed(t, 'm2.name', JOB.m2[0]), c2 = typed(t, 'm2.cost', JOB.m2[1]);
+    const q2 = before('m2.qty') ? '1' : typed(t, 'm2.qty', JOB.m2[2]);
+    const f2 = before('m2n.tap') ? -1 : before('m2c.tap') ? 0 : before('m2q.tap') ? 1 : before('labor.swipe') ? 2 : -1;
+    field($('m2-name'), n2, PH.name, f2 === 0, t);
+    field($('m2-cost'), c2, PH.cost, f2 === 1, t);
+    field($('m2-qty'), q2, PH.qty, f2 === 2, t);
+    const fl = before('rate.tap') ? -1 : before('hours.tap') ? 0 : before('gen.swipe') ? 1 : -1;
+    field($('l-rate'), typed(t, 'labor.rate', JOB.rate), 'e.g. 35', fl === 0, t);
+    field($('l-hours'), typed(t, 'labor.hours', JOB.hours), 'e.g. 8', fl === 1, t);
+
+    // ---- results (appear after the tap, like the real app) ----
+    const showRes = t >= ev('result.in');
+    $('sec-results').style.display = showRes ? 'block' : 'none';
+    const target = parseMoney(EST.tiers[1]);
+    const rs = evExact('rollStart'), re = evExact('total');
+    const roll = t >= re ? target : Math.round(target * E.expoOut(clamp((t - rs) / (re - rs))) * 100) / 100;
+    const tot = $('breakdown').querySelector('.total .value');
+    tot.textContent = money(roll);
+
+    // ---- scrolling (app px) ----
+    const off = el => { let y = 0; for (; el && el !== app; el = el.offsetParent) y += el.offsetTop; return y; };
+    const sLabor = off($('sec-labor')) - 70;
+    const sGen = off($('gen-btn')) - 1516 / APP_SCALE + 160;
+    const sRes = off($('sec-results')) - 70;
+    const sc1 = P(t, ev('labor.swipe'), 0.8, E.expoInOut), sc2 = P(t, ev('gen.swipe'), 0.8, E.expoInOut), sc3 = P(t, ev('result.in') + beat(0.25), 1, E.expoInOut);
+    const scroll = lerp(lerp(lerp(0, sLabor, sc1), sGen, sc2), sRes, showRes ? sc3 : 0);
+    app.style.transform = `scale(${APP_SCALE}) translateY(${-scroll}px)`;
+
+    // ---- the tapping thumb ----
+    const taps = [['m1n.tap', 'm1-name'], ['m1c.tap', 'm1-cost'], ['m1q.tap', 'm1-qty'], ['add.tap', 'btn-add'],
+      ['m2n.tap', 'm2-name'], ['m2c.tap', 'm2-cost'], ['m2q.tap', 'm2-qty'], ['rate.tap', 'l-rate'], ['hours.tap', 'l-hours'], ['gen.tap', 'gen-btn']];
+    const rest = { x: 900, y: 1650 };
+    let pos = rest, press = 0;
+    for (let i = 0; i < taps.length; i++) {
+      const [id, el] = taps[i], tt = evExact(id);
+      const prev = i ? evExact(taps[i - 1][0]) : evExact('close.in');
+      if (t < prev - beat(0.6)) continue;
+      const tgt = centre($(el), el === 'gen-btn' ? 0.55 : 0.4, 0.6);
+      const moveStart = Math.max(prev + beat(0.15), tt - beat(0.6));
+      const m = E.expoInOut(clamp((t - moveStart) / (tt - moveStart)));
+      // between taps the thumb lifts away so the typed text is visible
+      const lifted = { x: tgt.x + 110, y: tgt.y + 190 };
+      if (t <= tt) { pos = { x: lerp(i ? pos.x : rest.x, tgt.x, m), y: lerp(i ? pos.y : rest.y, tgt.y, m) }; }
+      else { const l = P(t, tt + beat(0.1), 0.4); pos = { x: lerp(tgt.x, lifted.x, l), y: lerp(tgt.y, lifted.y, l) }; }
+      press = Math.max(press, clamp(1 - Math.abs(t - tt) / beat(0.2)));
+    }
+    if (t > evExact('gen.tap') + beat(0.5)) { const away = P(t, evExact('gen.tap') + beat(0.5), 1); pos = { x: lerp(pos.x, 1300, away), y: lerp(pos.y, 2200, away) }; }
+    $('thumb').setAttribute('transform', `translate(${pos.x} ${pos.y}) scale(${1 - 0.06 * press})`);
+    $('btn-add').style.filter = `brightness(${t > evExact('add.tap') - beat(0.2) && t < evExact('add.tap') + beat(0.3) ? 1.5 : 1})`;
+    $('gen-btn').style.filter = `brightness(${t > evExact('gen.tap') - beat(0.2) && t < evExact('gen.tap') + beat(0.4) ? 1.35 : 1})`;
+
+    // ---- chip above the phone: materials subtotal, then the price ----
+    const priceMode = t >= ev('result.in');
+    $('chip-label').textContent = priceMode ? 'YOUR PRICE' : 'MATERIALS';
+    if (priceMode) {
+      $('chip-v').textContent = money(roll);
+      $('chip-v').style.color = t >= re ? 'var(--money)' : 'var(--strong)';
+      const land = clamp(1 - (t - re) / beat(1));
+      $('chip-v').style.transform = `scale(${t >= re ? 1 + 0.08 * land : 1})`;
+      $('chip').style.opacity = 1;
+    } else {
+      const a = P(t, ev('m1.sum'), 1), b = P(t, ev('m2.sum'), 0.75);
+      $('chip-v').textContent = money(Math.round((255 * a + 76 * b) * 100) / 100);
+      $('chip-v').style.color = b >= 1 ? 'var(--money)' : 'var(--strong)';
+      $('chip-v').style.transform = '';
+      $('chip').style.opacity = P(t, ev('m1.sum') - beat(1), 1) * (1 - P(t, ev('labor.swipe'), 0.5));
+    }
+    $('chip-v').style.transformOrigin = 'right center';
+  },
+
+  turn(t, s0, s1) {
+    $('world').style.display = $('turn-ui').style.display = 'block';
+    const enter = P(t, ev('turn.in'), 1.2);
+    const drift = clamp((t - s0) / (s1 - s0));
+    $('world').style.transform = `translateY(${lerp(540, 520, drift)}px) scale(${lerp(0.76, 0.78, drift)}) translateX(${lerp(-80, 0, enter)}px)`;
+    $('cu').setAttribute('transform', '');
+
+    // arm extends the phone toward the customer (back of the phone faces us)
+    const ext = P(t, ev('turn.in'), 1.2, E.expoOut);
+    const lower = P(t, ev('handshake') - beat(1), 0.6, E.expoInOut);
+    const shake = P(t, ev('handshake') - beat(0.5), 0.5, E.expoOut);
+    const pump = t >= ev('handshake') ? Math.sin((t - ev('handshake')) / SPB * Math.PI * 2) * 4 * (1 - P(t, ev('handshake'), 2, E.sineInOut)) : 0;
+    rot($('hm-armL'), lerp(lerp(22, -78, ext), -70, shake) + pump, 527, 905);
+    rot($('hm-foreL'), lerp(lerp(118, -6, ext), 0, shake), 527, 1060);
+    $('hm-phone').setAttribute('opacity', 1 - lower);
+    $('hm-phone-glow').setAttribute('opacity', 0); $('hm-phone-cam').setAttribute('opacity', 1);
+    rot($('hm-armR'), Math.sin(t * 2.4) * 1.5, 295, 905);
+    handyman(t, { look: 'customer', smile: true, brow: t > ev('pleased'), tilt: 3 });
+
+    // customer: looks at the phone, then pleased + nod, then hand comes in for the shake
+    const pleased = t >= ev('pleased');
+    const nod = pleased ? Math.sin((t - ev('pleased')) / SPB * Math.PI) * 5 * (1 - P(t, ev('pleased'), 2)) : 0;
+    customer(t, { look: pleased ? [-10, 0] : [-12, 8], pleased, nod });
+    $('cu-mug').style.opacity = 1;
+    const meet = { x: 527 + 330 * Math.sin(70 * Math.PI / 180), y: 905 + 330 * Math.cos(70 * Math.PI / 180) };
+    $('cu-hand').setAttribute('cx', lerp(1150, meet.x + 30, shake));
+    $('cu-hand').setAttribute('cy', lerp(1300, meet.y + pump * 3, shake));
+    $('cu-arm').firstElementChild.setAttribute('opacity', shake);
+
+    // tier cards pop out of the phone
+    const rec = P(t, ev('tiers.recommend'), 1);
+    ['budget', 'standard', 'premium'].forEach((k, i) => {
+      const p = clamp((t - ev('tiers.' + k)) / beat(0.5));
+      const el = $('tier' + i);
+      el.style.opacity = clamp(p * 2.5);
+      el.style.transform = `translateY(${lerp(140, 0, E.expoOut(p))}px) scale(${(p <= 0 ? 0.8 : lerp(0.8, 1, E.backOut(p, 1.3))) * (i === 1 ? lerp(1, 1.05, rec) : 1)})`;
+      if (i !== 1) el.style.filter = `brightness(${lerp(1, 0.6, rec)})`;
+    });
+    const st = $('tier1');
+    st.style.borderColor = rec > 0 ? `rgba(74,140,255,${rec})` : '';
+    st.style.boxShadow = `0 0 ${80 * rec}px rgba(74,140,255,${0.35 * rec}), 0 30px 60px -20px #000`;
+    st.querySelector('.price').style.color = rec > 0.5 ? 'var(--money)' : '';
+    $('rec-tag').style.opacity = rec;
+    const c = P(t, ev('caption'), 1.2);
+    $('caption').firstElementChild.style.transform = `translateY(${lerp(110, 0, c)}%)`;
+  },
+
+  end(t) {
+    $('end').style.display = 'block';
+    const p = clamp((t - ev('end.in')) / beat(1));
+    $('end-icon').style.transform = `scale(${p <= 0 ? 0 : lerp(0.5, 1, E.backOut(p))})`;
+    $('end-icon').style.opacity = clamp(p * 4);
+    [...$('end-line').children].forEach((m, i) => {
+      const l = P(t, ev('end.in') + beat(i * 0.25), 1.3);
+      m.firstElementChild.style.transform = `translateY(${lerp(110, 0, l)}%)`;
+    });
+    const s = P(t, ev('end.sub'), 1.3);
+    $('end-sub').style.opacity = s; $('end-sub').style.transform = `translateY(${lerp(30, 0, s)}px)`;
+    const f = clamp(1 - Math.abs(t - ev('end.final')) / beat(0.5));
+    $('end').style.filter = `brightness(${1 + 0.25 * f})`;
+  },
+};
+
+function build() {
+  const names = [['Budget', 'Tight margins'], ['Standard', 'Fair, sustainable profit'], ['Premium', 'Rush & complex work']];
+  $('tiers').innerHTML = names.map(([n, d], i) =>
+    `<div class="tier" id="tier${i}" style="top:${420 + i * 160}px">${i === 1 ? '<div class="tag" id="rec-tag">RECOMMENDED</div>' : ''}
+       <div><h3>${n}</h3><div class="desc">${d}</div></div><div class="price mono">${EST.tiers[i]}</div></div>`).join('');
+  $('breakdown').innerHTML = EST.breakdown.map(r =>
+    `<div class="result-row${r.label.startsWith('TOTAL') ? ' total' : ''}"><span class="label">${r.label}</span><span class="value">${r.value}</span></div>`).join('');
+}
+
+function drawGrain(frame) {
+  const ctx = $('grain').getContext('2d'), img = ctx.createImageData(270, 480), rnd = mulberry32(frame + 1);
+  for (let i = 0; i < img.data.length; i += 4) { const v = rnd() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+  ctx.putImageData(img, 0, 0);
+}
+
+function seek(t) {
+  document.querySelectorAll('.layer').forEach(l => { l.style.display = 'none'; });
+  const secs = BEATS.sections;
+  for (const sec of secs) {
+    const s0 = beat(sec.fromBeat), s1 = beat(sec.toBeat), last = sec === secs[secs.length - 1];
+    if (t >= s0 - (sec.fromBeat ? LEAD : 0) && (t < s1 - LEAD || (last && t <= DURATION))) scenes[sec.id](t, s0, s1);
+  }
+  const fl = evExact('result.in'), f = clamp(1 - (t - fl + LEAD) / beat(0.5));
+  $('flash').style.opacity = t >= fl - LEAD ? E.expoIn(f) * 0.6 : 0;
+  $('fadeout').style.opacity = clamp((t - beat(BEATS.bars * BEATS.beatsPerBar)) / BEATS.tailSeconds);
+  drawGrain(Math.round(t * BEATS.fps));
+}
+
+window.ready = (async () => {
+  BEATS = await (await fetch('./beats.json')).json();
+  EST = await (await fetch('../../brand/sample-estimate.json')).json();
+  SPB = 60 / BEATS.bpm;
+  DURATION = beat(BEATS.bars * BEATS.beatsPerBar) + BEATS.tailSeconds;
+  build();
+  await Promise.all(['800 100px "Inter Display"', '500 40px Inter', '700 40px "JetBrains Mono"', '20px "Noto Color Emoji"'].map(f => document.fonts.load(f)));
+  await Promise.all([...document.images].map(i => i.decode().catch(() => {})));
+  window.seek = seek; window.DURATION = DURATION;
+  seek(0);
+  return { duration: DURATION, fps: BEATS.fps };
+})();
+
+if (new URLSearchParams(location.search).has('render')) document.body.classList.add('render');
+else window.ready.then(() => {
+  const fit = () => { const s = Math.min(innerWidth / 1080, (innerHeight - 50) / 1920); $('stage').style.transform = `scale(${s})`; };
+  fit(); addEventListener('resize', fit);
+  const audio = new Audio('../../out/tiktok-onsite.wav');
+  let playing = false;
+  const tick = () => { if (!playing) return; seek(audio.currentTime); $('scrub').value = audio.currentTime / DURATION; $('clock').textContent = audio.currentTime.toFixed(2) + 's'; if (audio.ended) { playing = false; $('play').textContent = 'Play'; } requestAnimationFrame(tick); };
+  $('play').onclick = () => { playing = !playing; $('play').textContent = playing ? 'Pause' : 'Play'; if (playing) { audio.play(); tick(); } else audio.pause(); };
+  $('scrub').oninput = e => { audio.currentTime = e.target.value * DURATION; seek(audio.currentTime); $('clock').textContent = audio.currentTime.toFixed(2) + 's'; };
+});
+</script>
+</body>
+</html>
