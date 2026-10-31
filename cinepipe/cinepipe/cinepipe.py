@@ -12,7 +12,8 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from . import castkit, scenecraft, shotcaller, story_bible, storyboard as storyboard_mod
+from . import castkit, flowpack, scenecraft, shotcaller, story_bible, storyboard as storyboard_mod
+from .assemble import AssembleError, assemble as assemble_film
 from .llm import MODEL, Engine, EngineError
 from .models import CastkitRegistry, ScenecraftPlates, ShotList, StoryBible
 from .state import STAGES, GateError, Workspace
@@ -249,6 +250,44 @@ def storyboard(name: str, frames: Optional[Path] = typer.Option(None, help="Fold
         out = ws.dir / "production_pack.html"
         out.write_text(storyboard_mod.build(b, c, p, s, fr), encoding="utf-8")
         con.print(f"[green]✓[/] {out}" + ("" if fr else "  [dim](no frames folder found)[/]"))
+    _guard(go)
+
+
+@app.command("flowpack")
+def flowpack_cmd(name: str, veo_file: Optional[Path] = typer.Option(None, help="veo_flow.json with ingredient + shot prompts."),
+                 workspace: Path = WS):
+    """Write flow_pack.html: a step-by-step page for making the clips in Google Flow (Veo)."""
+    def go():
+        ws = _ws(workspace, name)
+        b, s = ws.load("story_bible"), ws.load("shotcaller")
+        src = veo_file or EXAMPLES / name / "veo_flow.json"
+        if not src.exists():
+            raise GateError(f"No Veo prompts at {src}. Pass --veo-file.")
+        fr = next((d for d in (ws.dir / "frames", EXAMPLES / name / "frames") if d.is_dir()), None)
+        (ws.dir / "clips").mkdir(exist_ok=True)
+        out = ws.dir / "flow_pack.html"
+        out.write_text(flowpack.build(b.title, flowpack.load(src), s, fr, name), encoding="utf-8")
+        con.print(f"[green]✓[/] {out}\n  Save your clips into {ws.dir / 'clips'}")
+    _guard(go)
+
+
+@app.command("assemble")
+def assemble_cmd(name: str, clips: Optional[Path] = typer.Option(None, help="Folder with SH010.mp4, SH020.mp4, ..."),
+                 full: bool = typer.Option(False, help="Keep whole clips instead of trimming to the planned length."),
+                 endcard: Optional[Path] = typer.Option(None, help="Video to append at the end."),
+                 workspace: Path = WS):
+    """Join the downloaded clips in shot order (plus end card) into final.mp4."""
+    def go():
+        ws = _ws(workspace, name)
+        shots_ = ws.load("shotcaller")
+        card = endcard or EXAMPLES / name / "endcard.mp4"
+        try:
+            out, log = assemble_film(shots_, clips or ws.dir / "clips", ws.dir / "final.mp4", card, full)
+        except AssembleError as e:
+            raise GateError(str(e)) from e
+        for line in log:
+            con.print(f"  {line}")
+        con.print(f"[green]✓ Finished film:[/] {out}")
     _guard(go)
 
 

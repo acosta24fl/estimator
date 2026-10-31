@@ -259,3 +259,22 @@ def test_engine_gives_up_after_repairs(bible, cast):
     bad = CastkitRegistry(characters=cast.characters[:1])
     with pytest.raises(EngineError, match="kept failing"):
         castkit.build(fake_engine([bad, bad, bad]), bible)
+
+
+# ---------------- Assembler (needs ffmpeg)
+@pytest.mark.skipif(not __import__("shutil").which("ffmpeg"), reason="ffmpeg not installed")
+def test_assemble_joins_trims_and_reports_missing(tmp_path, shots_data):
+    import subprocess
+    from cinepipe.assemble import assemble
+    shots = ShotList.model_validate(shots_data)  # handyman: SH010..SH050
+    clips = tmp_path / "clips"; clips.mkdir()
+    for name, audio in (("SH010.mp4", True), ("SH020 take 3.mp4", False)):
+        cmd = ["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=size=640x360:rate=24:duration=8"]
+        if audio:
+            cmd += ["-f", "lavfi", "-i", "sine=duration=8"]
+        subprocess.run(cmd + ["-shortest", str(clips / name)], check=True)
+    out, log = assemble(shots, clips, tmp_path / "final.mp4", None)
+    assert out.exists() and "SH020" in log[1] and "silence added" in log[1] and "Missing" in log[-1]
+    dur = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(out)],
+                               capture_output=True, text=True).stdout)
+    assert abs(dur - ((4.0 + 2.0) + (4.0 + 2.0))) < 0.3   # both shots have dialogue -> planned + 2s

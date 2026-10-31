@@ -1,0 +1,78 @@
+{
+  "ingredients": {
+    "Maria": "Photorealistic full-body photograph of a 39-year-old woman: heart-shaped face, shoulder-length straight black hair tucked behind the left ear, warm light-tan skin with a few freckles across the nose, dark brown almond eyes, softly arched brows, small straight nose. Slim athletic build, 5 ft 5 in. Wearing a cream cable-knit sweater with pushed-up sleeves, high-waisted mid-blue jeans, white canvas sneakers, thin gold hoop earrings. Standing facing the camera, relaxed, neutral friendly expression. Plain flat medium-gray studio background, soft even lighting with no harsh shadows, 50mm lens, sharp focus, natural skin texture. No text.",
+    "Daniel": "Photorealistic full-body photograph of a 46-year-old man: long oval face with a strong straight jaw, short salt-and-pepper beard trimmed close, cropped dark brown hair greying at the temples, olive-tan skin with fine sun lines, deep-set dark brown eyes, heavy straight brows, slightly crooked nose, small scar on the chin. Lean and strong, 6 ft tall. Wearing a faded olive canvas work shirt with sleeves rolled to the forearm, charcoal canvas work pants with a tape measure clipped at the hip, worn tan leather work boots, a flat carpenter pencil behind the right ear. Standing facing the camera, calm, small closed-mouth smile. Plain flat medium-gray studio background, soft even lighting with no harsh shadows, 50mm lens, sharp focus. No text.",
+    "Kitchen": "Photorealistic interior photograph of an empty, bright remodeled kitchen with no people: greige painted wall above glossy white subway tile backsplash, white quartz countertop, white shaker lower cabinets with brushed-brass bar pulls, oak floor, a double-hung window on the left letting in soft morning sunlight. The wall above the backsplash is bare, ready for upper cabinets. 35mm lens at counter height, natural light, subtle dust in the sunbeam, realistic film grain. No text.",
+    "Entry": "Photorealistic interior photograph of an empty narrow entry hall seen from inside the house, no people: a closed dark oak front door with a brass knob in white painted trim, oak plank floor running toward the door, a coat hook with a scarf on the left, a warm wall sconce, daylight glowing around the door edges. 35mm lens at eye level, realistic film grain. No text."
+  },
+  "shots": {
+    "SH010": {
+      "ingredients": [
+        "Maria",
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic, cinematic. Bright remodeled kitchen with white subway tile and a white quartz counter, morning sun from a window on the left. A single white shaker upper cabinet hangs visibly crooked on the wall, about two degrees out of level, its right door sagging lower than the left. the woman from the reference image (Maria, 39, shoulder-length straight black hair, cream cable-knit sweater, mid-blue jeans) stands two steps back, tilts her head to match the crooked cabinet, then crosses her arms and says with a small self-mocking laugh: \"Close enough... right?\" Slow handheld-smooth push-in, 35mm lens, shallow depth of field, soft dust in the sunbeam. Ambient room tone, faint fridge hum. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH020": {
+      "ingredients": [
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic macro close-up. A silver aluminium spirit level rests on top of a white cabinet. The green vial fills the center of the frame; the air bubble wobbles and settles clearly off-center, past the right line. 100mm macro lens, razor-thin focus on the vial, the wall behind melts into soft cream bokeh, warm morning light glinting on the aluminium. Locked-off camera. Quiet room tone, a tiny liquid slosh. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH030": {
+      "ingredients": [
+        "Daniel",
+        "Entry"
+      ],
+      "prompt": "Photorealistic, cinematic. Inside a narrow entry hall with oak plank floors, the dark oak front door swings open, and bright daylight floods in around the man from the reference image (Daniel, 46, short salt-and-pepper beard, olive canvas work shirt with rolled sleeves, charcoal work pants), who stands on the threshold holding a canvas tool bag. He gives a calm nod, smiles slightly and says in a low, warm voice: \"Morning. Let's take a look.\" He steps inside. Locked camera at eye level, 35mm lens, exposure set for the interior so the doorway glows. Sounds: door latch, birds outside, footsteps on wood. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH040": {
+      "ingredients": [
+        "Daniel",
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic, cinematic. The kitchen's back wall is bare, the crooked cabinet removed. A yellow cross-line laser level on a tripod clicks on and projects a perfectly straight bright green horizontal line across the wall. the man from the reference image (Daniel, 46, short salt-and-pepper beard, olive canvas work shirt with rolled sleeves, charcoal work pants) walks along the wall with a flat carpenter pencil and marks four short ticks on the green line at the stud locations, one eye closed as he sights down it. Slow sideways slider move, 35mm lens, room slightly dimmed so the laser glows, dust catching the green light. Sounds: laser click, pencil scratches. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH050": {
+      "ingredients": [
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic extreme close-up of a cabinet's maple hanging rail. A cordless drill enters from the right and drives a silver cabinet screw straight in; fine sawdust curls out in a spiral and falls, and the screw head seats perfectly flush with a click, then the drill pulls away. 100mm macro lens, raking window light showing the wood grain, locked-off camera. Sounds: drill whir, clutch click. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH060": {
+      "ingredients": [
+        "Maria",
+        "Daniel",
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic, cinematic. In the kitchen, a new white shaker upper cabinet is being hung along a green laser line; one cabinet is already installed beside it. the woman from the reference image (Maria, 39, shoulder-length straight black hair, cream cable-knit sweater, mid-blue jeans) braces the new cabinet's face with both palms, concentrating. She asks: \"Like this?\" Then the man from the reference image (Daniel, 46, short salt-and-pepper beard, olive canvas work shirt with rolled sleeves, charcoal work pants), standing on a step stool beside her with a cordless drill at the top corner, glances down at her and answers: \"Perfect. Hold it right there.\" He drives the first screw. Only one person speaks at a time. Locked camera slightly behind and to the left, 35mm lens, window light from the left. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH070": {
+      "ingredients": [
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic close-up under a white upper cabinet. Fingertips tap a thin wooden shim into the gap at the cabinet's edge, two light taps. Above it, a spirit level rests along the cabinet bottom; its green vial bubble drifts slowly and stops exactly centered between the two lines. Focus pulls from the shim to the vial. 85mm lens, warm window light from the left. Sounds: two soft wooden taps, a quiet satisfying settle. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH080": {
+      "ingredients": [
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic close-up of two white shaker cabinet doors with brushed-brass bar pulls. The left door is open, showing its concealed hinge; a hand turns the hinge adjustment screw a quarter turn with a screwdriver, then swings the door closed. The doors now sit perfectly aligned with identical narrow gaps on every side. Slow gentle push-in, 50mm lens, light raking across the door faces. Sounds: screwdriver click, soft door close. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH090": {
+      "ingredients": [
+        "Maria",
+        "Daniel",
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic, cinematic wide shot. The finished kitchen: a full run of white shaker upper cabinets, perfectly level, with brushed-brass pulls above white quartz counters and subway tile. Warm under-cabinet lights switch on one after another, pooling on the countertop. the woman from the reference image (Maria, 39, shoulder-length straight black hair, cream cable-knit sweater, mid-blue jeans) steps forward, then turns back to the man from the reference image (Daniel, 46, short salt-and-pepper beard, olive canvas work shirt with rolled sleeves, charcoal work pants) with a delighted smile and says: \"Okay. Now it's right.\" He gives a small nod and says nothing. Slow dolly back, 35mm lens, everything sharp, golden morning light. Sounds: soft light-switch clicks, room tone. No subtitles, no captions, no on-screen text, no logos, no music."
+    },
+    "SH100": {
+      "ingredients": [
+        "Maria",
+        "Kitchen"
+      ],
+      "prompt": "Photorealistic extreme close-up of a white shaker cabinet door standing slightly open, with a long brushed-brass bar pull. A woman's fingertip enters from the right and gives the door one light push; the door glides, slows smoothly on its soft-close damper over the last few centimetres, and closes silently. 85mm lens, shallow depth of field, warm light. Sound: a single soft, muted close. No subtitles, no captions, no on-screen text, no logos, no music."
+    }
+  }
+}

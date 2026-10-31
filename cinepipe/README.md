@@ -92,6 +92,10 @@ cinepipe approve myfilm SH040
 `cinepipe storyboard myfilm [--frames DIR]` writes `production_pack.html`: every prompt with a
 Copy button, in order, next to its storyboard frame (`SH010.jpg`, ...).
 
+`cinepipe flowpack myfilm` writes `flow_pack.html`, a step-by-step page for making the
+clips by hand in Google Flow (Veo), using `examples/<name>/veo_flow.json`. `cinepipe assemble myfilm` then joins
+`workspace/myfilm/clips/SH010.mp4 ...` in order (trimmed, 1080p, end card appended) into `final.mp4`.
+
 Other commands: `cinepipe status myfilm` shows what's done or stale, and
 `cinepipe brief myfilm` writes a motion-studio director's brief.
 
