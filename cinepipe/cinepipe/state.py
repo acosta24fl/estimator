@@ -54,10 +54,10 @@ class Workspace:
     def state(self) -> ProjectState:
         if not self.state_path.exists():
             raise GateError(f"No project '{self.name}' in {self.dir.parent}. Run: cinepipe new {self.name}")
-        return ProjectState.model_validate_json(self.state_path.read_text())
+        return ProjectState.model_validate_json(self.state_path.read_text(encoding="utf-8"))
 
     def _write_state(self, st: ProjectState) -> None:
-        self.state_path.write_text(st.model_dump_json(indent=2))
+        self.state_path.write_text(st.model_dump_json(indent=2), encoding="utf-8")
 
     def path(self, stage: str) -> Path:
         return self.dir / STAGES[stage][0]
@@ -66,7 +66,7 @@ class Workspace:
         """Write a validated artifact and record the upstream hashes it was built from."""
         self.require_upstream(stage)
         p = self.path(stage)
-        p.write_text(json.dumps(artifact.model_dump(mode="json"), indent=2, sort_keys=False) + "\n")
+        p.write_text(json.dumps(artifact.model_dump(mode="json"), indent=2, sort_keys=False) + "\n", encoding="utf-8")
         st = self.state()
         st.stages[stage] = StageRecord(
             path=p.name, sha256=_sha(p),
@@ -81,7 +81,7 @@ class Workspace:
         if not p.exists():
             raise GateError(f"{stage} has not been run yet. Run: cinepipe {COMMAND[stage]} {self.name}")
         try:
-            artifact = (schema or STAGES[stage][1]).model_validate_json(p.read_text())
+            artifact = (schema or STAGES[stage][1]).model_validate_json(p.read_text(encoding="utf-8"))
         except ValidationError as e:
             raise GateError(f"{p.name} fails its schema (was it hand-edited?):\n{e}") from e
         stale = self.stale_upstream(stage)

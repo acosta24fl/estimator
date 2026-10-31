@@ -89,6 +89,9 @@ Then:
 cinepipe approve myfilm SH040
 ```
 
+`cinepipe storyboard myfilm [--frames DIR]` writes `production_pack.html`: every prompt with a
+Copy button, in order, next to its storyboard frame (`SH010.jpg`, ...).
+
 Other commands: `cinepipe status myfilm` shows what's done or stale, and
 `cinepipe brief myfilm` writes a motion-studio director's brief.
 

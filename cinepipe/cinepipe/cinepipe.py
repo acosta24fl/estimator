@@ -12,7 +12,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.table import Table
 
-from . import castkit, scenecraft, shotcaller, story_bible
+from . import castkit, scenecraft, shotcaller, story_bible, storyboard as storyboard_mod
 from .llm import MODEL, Engine, EngineError
 from .models import CastkitRegistry, ScenecraftPlates, ShotList, StoryBible
 from .state import STAGES, GateError, Workspace
@@ -37,7 +37,7 @@ def _engine(model: str) -> Engine:
 
 def _import(path: Path, schema):
     try:
-        return schema.model_validate_json(path.read_text())
+        return schema.model_validate_json(path.read_text(encoding="utf-8"))
     except ValidationError as e:
         raise GateError(f"{path} fails the {schema.__name__} guardrails:\n{e}") from e
 
@@ -70,7 +70,7 @@ def run_bible(ws: Workspace, idea: str | None, from_file: Path | None, model: st
         bible = story_bible.interview(engine, idea, ask)
     ws.save("story_bible", bible)
     md = ws.dir / "story_bible_skill.md"
-    md.write_text(story_bible.skill_md(bible))
+    md.write_text(story_bible.skill_md(bible), encoding="utf-8")
     _done(ws, "story_bible", [md])
     return engine
 
@@ -87,7 +87,7 @@ def run_cast(ws: Workspace, from_file: Path | None, model: str) -> Engine | None
         reg = castkit.build(engine, bible)
     ws.save("castkit", reg)
     md = ws.dir / "castkit_prompts.md"
-    md.write_text(castkit.prompts_md(reg))
+    md.write_text(castkit.prompts_md(reg), encoding="utf-8")
     _done(ws, "castkit", [md])
     return engine
 
@@ -104,7 +104,7 @@ def run_plates(ws: Workspace, from_file: Path | None, model: str) -> Engine | No
         plates = scenecraft.build(engine, bible)
     ws.save("scenecraft", plates)
     md = ws.dir / "scenecraft_prompts.md"
-    md.write_text(scenecraft.prompts_md(plates))
+    md.write_text(scenecraft.prompts_md(plates), encoding="utf-8")
     _done(ws, "scenecraft", [md])
     return engine
 
@@ -132,12 +132,12 @@ def _export_shots(ws: Workspace, shots: ShotList, cast: CastkitRegistry) -> None
         shutil.rmtree(out)
     out.mkdir()
     for s in shots.shots:
-        (out / f"{s.slot_01_shot_id_duration.shot_id}.txt").write_text(shotcaller.shot_file(s, cast))
+        (out / f"{s.slot_01_shot_id_duration.shot_id}.txt").write_text(shotcaller.shot_file(s, cast), encoding="utf-8")
     _done(ws, "shotcaller", [out])
 
 
 def _beats(beats: str | None, beats_file: Path | None) -> str | None:
-    return beats_file.read_text() if beats_file else beats
+    return beats_file.read_text(encoding="utf-8") if beats_file else beats
 
 
 # ---------------------------------------------------------------- commands
@@ -233,8 +233,22 @@ def brief(name: str, workspace: Path = WS):
         ws = _ws(workspace, name)
         b, c, s = ws.load("story_bible"), ws.load("castkit"), ws.load("shotcaller")
         p = ws.dir / "director_brief.md"
-        p.write_text(director_brief(b, c, s))
+        p.write_text(director_brief(b, c, s), encoding="utf-8")
         con.print(f"[green]✓[/] {p}")
+    _guard(go)
+
+
+@app.command()
+def storyboard(name: str, frames: Optional[Path] = typer.Option(None, help="Folder of SH010.jpg, SH020.jpg... storyboard frames."),
+               workspace: Path = WS):
+    """Write production_pack.html: every prompt with copy buttons, plus storyboard frames."""
+    def go():
+        ws = _ws(workspace, name)
+        b, c, p, s = ws.load("story_bible"), ws.load("castkit"), ws.load("scenecraft"), ws.load("shotcaller")
+        fr = frames or next((d for d in (ws.dir / "frames", EXAMPLES / name / "frames") if d.is_dir()), None)
+        out = ws.dir / "production_pack.html"
+        out.write_text(storyboard_mod.build(b, c, p, s, fr), encoding="utf-8")
+        con.print(f"[green]✓[/] {out}" + ("" if fr else "  [dim](no frames folder found)[/]"))
     _guard(go)
 
 
@@ -249,9 +263,9 @@ def demo(workspace: Path = WS):
         run_cast(ws, src / "castkit_registry.json", MODEL)
         run_plates(ws, src / "scenecraft_plates.json", MODEL)
         run_shots(ws, None, src / "shotcaller_shots.json", MODEL)
-        (ws.dir / "director_brief.md").write_text(director_brief(ws.load("story_bible"), ws.load("castkit"), ws.load("shotcaller")))
+        (ws.dir / "director_brief.md").write_text(director_brief(ws.load("story_bible"), ws.load("castkit"), ws.load("shotcaller")), encoding="utf-8")
         first = sorted((ws.dir / "shots").glob("*.txt"))[0]
-        con.print(Panel(first.read_text(), title=f"{first.name}: compiled 16-slot prompt"))
+        con.print(Panel(first.read_text(encoding="utf-8"), title=f"{first.name}: compiled 16-slot prompt"))
     _guard(go)
 
 

@@ -23,6 +23,8 @@
 const BRAND = { name: '', phone: '', web: '' };
 
 const W = 1920, H = 1080;
+// ?clean renders frames without captions/callouts (storyboard references for AI video tools)
+const CLEAN = new URLSearchParams(location.search).has('clean');
 const cv = document.getElementById('c'), ctx = cv.getContext('2d');
 const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
 const lerp = (a, b, p) => a + (b - a) * p;
@@ -255,6 +257,7 @@ function person(c, x, foot, h, o) {
 
 // ------------------------------------------------------------------ type
 function title(t, start, kicker, text, o = {}) {
+  if (CLEAN) return;
   const p = clamp((t - start) / beat(1.2));
   if (p <= 0) return;
   const out = o.until ? 1 - clamp((t - o.until) / beat(0.6)) : 1;
@@ -278,6 +281,7 @@ function title(t, start, kicker, text, o = {}) {
 
 // leader-line measurement callout
 function callout(x, y, lx, ly, label, a, good) {
+  if (CLEAN) return;
   ctx.save(); ctx.globalAlpha = a;
   const col = good ? '#3f8f3a' : '#c2451e';
   for (const [w, c] of [[7, 'rgba(255,255,255,0.9)'], [3, '#1b1a18']]) {
