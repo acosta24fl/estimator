@@ -275,6 +275,7 @@ def flowpack_cmd(name: str, veo_file: Optional[Path] = typer.Option(None, help="
 def assemble_cmd(name: str, clips: Optional[Path] = typer.Option(None, help="Folder with SH010.mp4, SH020.mp4, ..."),
                  full: bool = typer.Option(False, help="Keep whole clips instead of trimming to the planned length."),
                  endcard: Optional[Path] = typer.Option(None, help="Video to append at the end."),
+                 lengths: Optional[str] = typer.Option(None, help="Seconds to keep from each clip, in order, e.g. 6,6,4."),
                  workspace: Path = WS):
     """Join the downloaded clips in shot order (plus end card) into final.mp4."""
     def go():
@@ -282,7 +283,8 @@ def assemble_cmd(name: str, clips: Optional[Path] = typer.Option(None, help="Fol
         shots_ = ws.load("shotcaller")
         card = endcard or EXAMPLES / name / "endcard.mp4"
         try:
-            out, log = assemble_film(shots_, clips or ws.dir / "clips", ws.dir / "final.mp4", card, full)
+            secs = [float(x) for x in lengths.split(",")] if lengths else None
+            out, log = assemble_film(shots_, clips or ws.dir / "clips", ws.dir / "final.mp4", card, full, secs)
         except AssembleError as e:
             raise GateError(str(e)) from e
         for line in log:

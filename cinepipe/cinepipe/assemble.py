@@ -44,7 +44,7 @@ def find_clips(clips_dir: Path, shot_ids: list[str]) -> list[tuple[str, Path]]:
 
 
 def assemble(shots: ShotList, clips_dir: Path, out: Path, endcard: Path | None, full: bool = False,
-             width: int = 1920, height: int = 1080, fps: int = 30) -> tuple[Path, list[str]]:
+             lengths: list[float] | None = None, width: int = 1920, height: int = 1080, fps: int = 30) -> tuple[Path, list[str]]:
     ffmpeg, ffprobe = _need("ffmpeg"), _need("ffprobe")
     plan = {s.slot_01_shot_id_duration.shot_id: s for s in shots.shots}
     clips = find_clips(clips_dir, list(plan))
@@ -59,7 +59,9 @@ def assemble(shots: ShotList, clips_dir: Path, out: Path, endcard: Path | None, 
         items = [(sid, f, plan[sid]) for sid, f in clips] + ([("END", endcard, None)] if endcard and endcard.exists() else [])
         for n, (sid, f, shot) in enumerate(items):
             dur, has_audio = _probe(ffprobe, f)
-            if shot is None or full:
+            if shot is not None and lengths and n < len(lengths):
+                keep = min(dur, lengths[n])
+            elif shot is None or full:
                 keep = dur
             else:
                 want = shot.slot_01_shot_id_duration.duration_s + (DIALOGUE_EXTRA_S if shot.slot_14_serialized_dialogue_gate else 0)
